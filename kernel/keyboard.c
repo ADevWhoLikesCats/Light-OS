@@ -26,13 +26,6 @@ static volatile uint32_t ring_head = 0;
 static volatile uint32_t ring_tail = 0;
 static volatile int      shift_down = 0;
 
-static inline uint8_t inb(uint16_t port)
-{
-    uint8_t v;
-    __asm__ volatile("inb %1, %0" : "=a"(v) : "Nd"(port));
-    return v;
-}
-
 static void ring_push(char c)
 {
     uint32_t next = (ring_head + 1) % KEYBOARD_BUFFER_SIZE;
