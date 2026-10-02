@@ -88,15 +88,27 @@ $(BUILD_DIR)/main.o: $(KERN_DIR)/main.c $(KERN_DIR)/idt.h | dirs
 $(BUILD_DIR)/idt.o: $(KERN_DIR)/idt.c $(KERN_DIR)/idt.h | dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/pic.o: $(KERN_DIR)/pic.c $(KERN_DIR)/pic.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/pit.o: $(KERN_DIR)/pit.c $(KERN_DIR)/pit.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/irq.o: $(KERN_DIR)/irq.asm | dirs
+	$(AS) $(ASFLAGS_ELF) $< -o $@
+
 $(BUILD_DIR)/isr.o: $(KERN_DIR)/isr.asm | dirs
 	$(AS) $(ASFLAGS_ELF) $< -o $@
 
 # ---- Kernel ELF link ----
-$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(KERN_DIR)/linker.ld
+$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(KERN_DIR)/linker.ld
 	$(LD) $(LDFLAGS) \
 		$(BUILD_DIR)/main.o \
 		$(BUILD_DIR)/idt.o \
 		$(BUILD_DIR)/isr.o \
+		$(BUILD_DIR)/pic.o \
+		$(BUILD_DIR)/pit.o \
+		$(BUILD_DIR)/irq.o \
 		-o $@
 
 # ---- Kernel raw binary (objcopy + pad to KERNEL_SECTORS * 512) ----
@@ -130,15 +142,15 @@ boot: $(STAGE1_BIN) $(STAGE2_BIN)
 	dd if=$(STAGE1_BIN) of=$(IMAGE) bs=512 seek=0 conv=notrunc 2>/dev/null
 	dd if=$(STAGE2_BIN) of=$(IMAGE) bs=512 seek=1 conv=notrunc 2>/dev/null
 	@echo "boot image: $(IMAGE)"
-	$(QEMU) -fda $(IMAGE) -m 256M -serial stdio -no-reboot -no-shutdown
+	stdbuf -o0 $(QEMU) -fda $(IMAGE) -m 256M -serial stdio -no-reboot -no-shutdown
 
 # ---- Boot full image ----
 run: $(IMAGE)
-	$(QEMU) -fda $(IMAGE) -m 256M -serial stdio -no-reboot -no-shutdown
+	stdbuf -o0 $(QEMU) -fda $(IMAGE) -m 256M -serial stdio -no-reboot -no-shutdown
 
 # ---- Debug (QEMU waits for GDB on :1234) ----
 debug: $(IMAGE)
-	$(QEMU) -fda $(IMAGE) -m 256M -serial stdio -no-reboot -no-shutdown -s -S
+	stdbuf -o0 $(QEMU) -fda $(IMAGE) -m 256M -serial stdio -no-reboot -no-shutdown -s -S
 
 # ---- Clean ----
 clean:

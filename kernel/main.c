@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 #include "idt.h"
+#include "pic.h"
+#include "pit.h"
 
 #define VGA_BASE   0xB8000ULL
 #define VGA_COLS   80
@@ -83,14 +85,32 @@ void _start(void)
     kputs("mykernel: installing IDT...\n");
 
     idt_init();
+    kputs("mykernel: IDT installed\n");
 
-    kputs("mykernel: IDT installed, triggering int3\n");
+    pic_remap();
+    kputs("mykernel: PIC remapped\n");
 
-    __asm__ volatile("int $3");
+    kputs("mykernel: calling pit_init\n");
+    pit_init(100);
+    kputs("mykernel: pit_init returned\n");
 
-    kputs("mykernel: this line should NOT print\n");
+    kputs("mykernel: calling pic_clear_mask\n");
+    pic_clear_mask(0);
+    kputs("mykernel: pic_clear_mask returned\n");
 
+    kputs("mykernel: enabling interrupts\n");
+    __asm__ volatile("sti");
+    kputs("mykernel: interrupts enabled, waiting for ticks\n");
+
+    uint64_t last = 0;
     for (;;) {
         __asm__ volatile("hlt");
+        uint64_t now = pit_ticks();
+        if (now != last) {
+            last = now;
+            if ((now % 100) == 0) {
+                serial_putc('.');
+            }
+        }
     }
 }

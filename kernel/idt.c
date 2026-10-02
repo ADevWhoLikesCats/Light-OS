@@ -22,6 +22,7 @@ static struct idt_entry idt[IDT_ENTRIES];
 static struct idt_ptr   idtp;
 
 extern void *isr_stub_table[32];
+extern void *irq_stub_table[16];
 
 static inline void outb(uint16_t port, uint8_t val)
 {
@@ -58,7 +59,7 @@ static void serial_hex(uint64_t v)
 static void idt_set_gate(int n, uint64_t handler)
 {
     idt[n].offset_low  = handler & 0xFFFF;
-    idt[n].selector    = 0x08;          /* kernel code segment */
+    idt[n].selector    = 0x18;          /* kernel code segment */
     idt[n].ist         = 0;             /* no IST for now */
     idt[n].type_attr   = 0x8E;          /* present, ring 0, interrupt gate */
     idt[n].offset_mid  = (handler >> 16) & 0xFFFF;
@@ -77,6 +78,10 @@ void idt_init(void)
 
     for (int i = 0; i < 32; i++) {
         idt_set_gate(i, (uint64_t)isr_stub_table[i]);
+    }
+
+    for (int i = 0; i < 16; i++) {
+        idt_set_gate(32 + i, (uint64_t)irq_stub_table[i]);
     }
 
     __asm__ volatile("lidt %0" :: "m"(idtp));
@@ -151,4 +156,24 @@ void isr_handler(struct regs *r)
     for (;;) {
         __asm__ volatile("cli; hlt");
     }
+}
+
+
+/* Dispatch for hardware IRQs (vectors 32..47). */
+void irq_handler(struct regs *r)
+{
+    uint64_t vec = r->vector;
+    uint8_t  irq = (uint8_t)(vec - 32);
+
+    if (irq == 0) {
+        extern void pit_tick(void);
+        pit_tick();
+    } else {
+        serial_print("\nunexpected IRQ ");
+        serial_hex(irq);
+        serial_print("\n");
+    }
+
+    extern void pic_send_eoi(uint8_t irq);
+    pic_send_eoi(irq);
 }

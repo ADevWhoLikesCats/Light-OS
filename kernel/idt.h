@@ -15,5 +15,7 @@ struct regs {
 
 void idt_init(void);
 void isr_handler(struct regs *r);
+void irq_handler(struct regs *r);
+void idt_register_irq_stubs(void);
 
 #endif
