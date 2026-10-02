@@ -84,3 +84,13 @@ char keyboard_poll(void)
     ring_tail = (ring_tail + 1) % KEYBOARD_BUFFER_SIZE;
     return c;
 }
+
+
+char keyboard_getchar_blocking(void)
+{
+    for (;;) {
+        char c = keyboard_poll();
+        if (c) return c;
+        __asm__ volatile("hlt");
+    }
+}

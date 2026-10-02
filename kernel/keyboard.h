@@ -10,6 +10,7 @@ void     keyboard_init(void);
 int      keyboard_has_key(void);
 char     keyboard_getchar(void);      /* blocking; returns 0 if none (non-blocking poll) */
 char     keyboard_poll(void);         /* returns 0 if no key waiting */
+char     keyboard_getchar_blocking(void); /* waits for a key */
 
 /* IRQ1 handler entry — called from irq_handler. */
 void     keyboard_irq(void);

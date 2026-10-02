@@ -13,6 +13,8 @@
 #include "framebuffer.h"
 #include "keyboard.h"
 #include "console.h"
+#include "vfs.h"
+#include "shell.h"
 #include "serial.h"
 
 #define COM1 0x3F8
@@ -74,6 +76,17 @@ __attribute__((section(".text._start"), used))
 void _start(void)
 {
     serial_init();
+    {
+        volatile unsigned char *p = (volatile unsigned char *)0x108640;
+        extern char __kernel_end[];
+        serial_print("boot: [0x108640]=");
+        serial_hex(p[0]);
+        serial_print(" [0x108641]=");
+        serial_hex(p[1]);
+        serial_print(" __kernel_end=");
+        serial_hex((uint64_t)__kernel_end);
+        serial_print("\n");
+    }
     serial_print("mykernel: entry\n");
 
     serial_print("mykernel: installing GDT+TSS...\n");
@@ -111,22 +124,15 @@ void _start(void)
     serial_print("mykernel: console_init...\n");
     console_init();
 
+    serial_print("mykernel: vfs_init...\n");
+    vfs_init();
+
     kputs("mykernel: console ready\n");
+
     kputs("mykernel: idle loop, type on the keyboard\n");
 
-    for (;;) {
-        __asm__ volatile("hlt");
-        char c = keyboard_poll();
-        if (c) {
-            kputs("key: ");
-            if (c == '\n')       kputs("<enter>\n");
-            else if (c == '\b')  kputs("<backspace>\n");
-            else if (c == '\t')  kputs("<tab>\n");
-            else if (c == 27)    kputs("<esc>\n");
-            else {
-                char buf[3] = { c, '\n', 0 };
-                kputs(buf);
-            }
-        }
-    }
+    shell_loop();
+
+    /* Shell never returns. */
+    for (;;) __asm__ volatile("hlt");
 }

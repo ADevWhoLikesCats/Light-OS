@@ -86,15 +86,15 @@ void gdt_init(void)
     /* Kernel data: access=0x92, gran=0xC0 */
     gdt_set(2, 0, 0xFFFFF, 0x92, 0xC0);
 
-    /* User code: access=0xFA (ring 3), gran=0xA0 */
-    gdt_set(3, 0, 0xFFFFF, 0xFA, 0xA0);
+    /* User data: at 0x18 (must come BEFORE user code for SYSRET) */
+    gdt_set(3, 0, 0xFFFFF, 0xF2, 0xC0);
 
-    /* User data: access=0xF2 (ring 3), gran=0xC0 */
-    gdt_set(4, 0, 0xFFFFF, 0xF2, 0xC0);
+    /* User code: at 0x20 */
+    gdt_set(4, 0, 0xFFFFF, 0xFA, 0xA0);
 
     /* TSS at selector 0x28 (index 5, occupying slots 5 and 6) */
     uint64_t tss_base = (uint64_t)&tss;
-    gdt_set_tss(5, tss_base, sizeof(tss) - 1);
+    gdt_set_tss(5, tss_base, 0xFFFF);
 
     /* Zero the TSS */
     uint8_t *p = (uint8_t *)&tss;
@@ -109,8 +109,22 @@ void gdt_init(void)
     gdtp.base  = (uint64_t)&gdt;
     gdt_load(&gdtp);
 
+    serial_print("gdt: tss at ");
+    serial_hex((uint64_t)&tss);
+    serial_print(" rsp0 = ");
+    serial_hex(tss.rsp0);
+    serial_print(" stack_base = ");
+    serial_hex((uint64_t)kernel_stack);
+    serial_print("\n");
+
     /* Load the TSS into TR */
     __asm__ volatile("ltr %0" :: "r"((uint16_t)GDT_TSS));
+
+    uint16_t tr;
+    __asm__ volatile("str %0" : "=r"(tr));
+    serial_print("gdt: TR = ");
+    serial_hex(tr);
+    serial_print("\n");
 
     serial_print("gdt: loaded GDT+TSS\n");
 }

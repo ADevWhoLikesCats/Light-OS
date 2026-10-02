@@ -44,6 +44,17 @@ typedef struct {
 uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
 {
     const uint8_t *base = (const uint8_t *)elf_data;
+    serial_print("elf: base=");
+    serial_hex((uint64_t)base);
+    serial_print(" [0x1000]=");
+    serial_hex(base[0x1000]);
+    serial_print(" [0x2000]=");
+    serial_hex(base[0x2000]);
+    serial_print(" [0x2001]=");
+    serial_hex(base[0x2001]);
+    serial_print(" size=");
+    serial_hex(elf_size);
+    serial_print("\n");
 
     /* Sanity: size must at least fit the header */
     if (elf_size < sizeof(Elf64_Ehdr)) {
@@ -80,7 +91,9 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
         uint64_t filesz = p->p_filesz;
         uint64_t offset = p->p_offset;
 
-        serial_print("elf: LOAD vaddr=");
+        serial_print("elf: LOAD p_offset=");
+        serial_hex(p->p_offset);
+        serial_print(" vaddr=");
         serial_hex(vaddr);
         serial_print(" filesz=");
         serial_hex(filesz);
@@ -112,6 +125,19 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
                 uint64_t file_off = offset + (abs_va - vaddr);
                 if (file_off >= elf_size) continue;
                 dst[j] = base[file_off];
+            }
+
+            {
+                serial_print("elf: seg dst[0..7]=");
+                for (int q = 0; q < 8; q++) {
+                    uint32_t v = dst[q];
+                    char buf[3] = { (v >> 4) < 10 ? '0'+(v>>4) : 'a'+((v>>4)-10),
+                                    (v & 0xF) < 10 ? '0'+(v&0xF) : 'a'+((v&0xF)-10),
+                                    0 };
+                    serial_print(buf);
+                    serial_print(" ");
+                }
+                serial_print("\n");
             }
 
             /* Map with USER access. Writable if PF_W. */

@@ -19,6 +19,7 @@ struct idt_ptr {
 } __attribute__((packed));
 
 static struct idt_entry idt[IDT_ENTRIES];
+static int irq_debug_count = 0;
 static struct idt_ptr   idtp;
 
 extern void *isr_stub_table[32];
@@ -165,6 +166,7 @@ void irq_handler(struct regs *r)
     uint64_t vec = r->vector;
     uint8_t  irq = (uint8_t)(vec - 32);
 
+
     if (irq == 0) {
         extern void pit_tick(void);
         pit_tick();
@@ -182,6 +184,6 @@ void irq_handler(struct regs *r)
 
     if (irq == 0) {
         extern void scheduler_tick(void);
-        scheduler_tick();
+        /* scheduler_tick(); */
     }
 }

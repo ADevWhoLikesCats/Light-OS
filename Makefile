@@ -52,7 +52,7 @@ ASFLAGS_ELF := -f elf64
 STAGE2_START_SECTOR := 1
 STAGE2_SECTORS      := 32
 KERNEL_START_SECTOR := 17
-KERNEL_SECTORS      := 64
+KERNEL_SECTORS      := 96
 
 # ---- Phony targets ----
 .PHONY: all clean run boot debug kernel dirs
@@ -127,6 +127,15 @@ $(BUILD_DIR)/keyboard.o: $(KERN_DIR)/keyboard.c $(KERN_DIR)/keyboard.h | dirs
 $(BUILD_DIR)/console.o: $(KERN_DIR)/console.c $(KERN_DIR)/console.h $(KERN_DIR)/framebuffer.h $(KERN_DIR)/font8x16.h | dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/vfs.o: $(KERN_DIR)/vfs.c $(KERN_DIR)/vfs.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/initramfs.o: $(KERN_DIR)/initramfs.c $(KERN_DIR)/vfs.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/shell.o: $(KERN_DIR)/shell.c $(KERN_DIR)/shell.h $(KERN_DIR)/console.h $(KERN_DIR)/keyboard.h $(KERN_DIR)/vfs.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/syscall_entry.o: $(KERN_DIR)/syscall_entry.asm | dirs
 	$(AS) $(ASFLAGS_ELF) $< -o $@
 
@@ -143,7 +152,7 @@ $(BUILD_DIR)/isr.o: $(KERN_DIR)/isr.asm | dirs
 	$(AS) $(ASFLAGS_ELF) $< -o $@
 
 # ---- Kernel ELF link ----
-$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o $(BUILD_DIR)/heap.o $(BUILD_DIR)/thread.o $(BUILD_DIR)/switch.o $(BUILD_DIR)/gdt.o $(BUILD_DIR)/gdt_load.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/syscall_entry.o $(BUILD_DIR)/userspace.o $(BUILD_DIR)/elf.o $(BUILD_DIR)/framebuffer.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/console.o $(KERN_DIR)/linker.ld
+$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o $(BUILD_DIR)/heap.o $(BUILD_DIR)/thread.o $(BUILD_DIR)/switch.o $(BUILD_DIR)/gdt.o $(BUILD_DIR)/gdt_load.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/syscall_entry.o $(BUILD_DIR)/userspace.o $(BUILD_DIR)/elf.o $(BUILD_DIR)/framebuffer.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/console.o $(BUILD_DIR)/vfs.o $(BUILD_DIR)/initramfs.o $(BUILD_DIR)/shell.o $(KERN_DIR)/linker.ld
 	$(LD) $(LDFLAGS) \
 		$(BUILD_DIR)/main.o \
 		$(BUILD_DIR)/idt.o \
@@ -165,6 +174,9 @@ $(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD
 		$(BUILD_DIR)/framebuffer.o \
 		$(BUILD_DIR)/keyboard.o \
 		$(BUILD_DIR)/console.o \
+		$(BUILD_DIR)/vfs.o \
+		$(BUILD_DIR)/initramfs.o \
+		$(BUILD_DIR)/shell.o \
 		-o $@
 
 # ---- Kernel raw binary (objcopy + pad to KERNEL_SECTORS * 512) ----
