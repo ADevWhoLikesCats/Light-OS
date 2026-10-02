@@ -1,0 +1,42 @@
+# ---- Build outputs ----
+build/
+*.o
+*.elf
+*.bin
+*.img
+*.iso
+
+# ---- QEMU / debug artifacts ----
+*.log
+qemu.log
+serial.log
+monitor.log
+
+# ---- Editor / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# ---- OS noise ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Compiler artifacts ----
+*.d
+*.gcda
+*.gcno
+*.gcov
+
+# ---- Misc ----
+core
+core.*
+vgcore.*
+tags
+TAGS
+cscope.out
+compile_commands.json
