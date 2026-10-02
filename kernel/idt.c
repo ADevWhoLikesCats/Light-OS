@@ -168,6 +168,9 @@ void irq_handler(struct regs *r)
     if (irq == 0) {
         extern void pit_tick(void);
         pit_tick();
+    } else if (irq == 1) {
+        extern void keyboard_irq(void);
+        keyboard_irq();
     } else {
         serial_print("\nunexpected IRQ ");
         serial_hex(irq);

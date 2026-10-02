@@ -17,7 +17,7 @@ ORG 0x7C00
 STAGE2_SEG  equ 0x0000
 STAGE2_OFF  equ 0x8000
 STAGE2_LBA  equ 1
-STAGE2_SECS equ 16          ; must match Makefile's STAGE2_SECTORS
+STAGE2_SECS equ 32          ; must match Makefile's STAGE2_SECTORS
 
 start:
     cli

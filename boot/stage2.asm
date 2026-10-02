@@ -76,6 +76,25 @@ e820_failed:
 
 e820_done:
 
+    ; ---- VBE query and mode set ----
+    mov si, msg_vbe
+    call serial_print
+
+    call vbe_init
+    jc   vbe_failed
+
+    mov si, msg_vbe_ok
+    call serial_print
+    jmp  vbe_done
+
+vbe_failed:
+    mov si, msg_vbe_err
+    call serial_print
+    cli
+    hlt
+
+vbe_done:
+
     ; --- Enable A20 via port 0x92 ---
     in  al, 0x92
     or  al, 0x02
@@ -230,6 +249,120 @@ e820_query:
     ret
 
 ; ------------------------------------------------------------
+; vbe_init — query VBE and set 1024x768x32 linear framebuffer.
+; On success: stores info at 0x6000, CF=0.
+;   0x6000: u32 framebuffer_phys
+;   0x6004: u32 width
+;   0x6008: u32 height
+;   0x600C: u32 pitch
+;   0x6010: u8  bpp
+; ------------------------------------------------------------
+vbe_init:
+    pusha
+    push es
+
+    ; --- Step 1: get controller info (VbeInfoBlock) at 0x8000 ---
+    mov ax, 0x0000
+    mov es, ax
+    mov di, 0x5000
+    mov dword [es:di], 0x32454256      ; 'VBE2'
+    mov ax, 0x4F00
+    int 0x10
+    cmp ax, 0x004F
+    jne .fail
+
+    ; --- Step 2: iterate modes, find 1024x768x32 ---
+    ; Mode list is at [0x8000 + 0x0E] (far pointer: offset + segment)
+    mov si, [0x5000 + 0x0E]            ; offset
+    mov ax, [0x5000 + 0x10]            ; segment
+    mov fs, ax
+
+.next_mode:
+    mov cx, [fs:si]                    ; mode number
+    cmp cx, 0xFFFF
+    je  .fail                          ; end of list
+
+    ; Progress dot
+    push ax
+    mov al, '.'
+    call serial_putc
+    pop ax
+
+    add si, 2
+
+    ; Get mode info at 0x8200
+    push si
+    mov ax, 0x0000
+    mov es, ax
+    mov di, 0x5200
+    mov ax, 0x4F01
+    int 0x10
+    pop si
+    cmp ax, 0x004F
+    jne .next_mode
+
+    ; Check resolution: bytes 0x12=width, 0x14=height, 0x19=bpp
+    mov ax, [0x5200 + 0x12]
+    cmp ax, 1024
+    jne .next_mode
+    mov ax, [0x5200 + 0x14]
+    cmp ax, 768
+    jne .next_mode
+    mov al, [0x5200 + 0x19]
+    cmp al, 32
+    jne .next_mode
+
+    ; Found it. CX holds the mode number.
+    ; Set mode with linear framebuffer bit (0x4000).
+    mov bx, cx
+    or  bx, 0x4000
+    mov ax, 0x4F02
+    int 0x10
+    cmp ax, 0x004F
+    jne .fail
+
+    ; --- Step 3: read back mode info and store at 0x6000 ---
+    mov ax, 0x0000
+    mov es, ax
+    mov di, 0x5200
+    mov ax, 0x4F01
+    int 0x10
+    cmp ax, 0x004F
+    jne .fail
+
+    ; framebuffer physical address at 0x28 (dword)
+    mov eax, [0x5200 + 0x28]
+    mov [0x6000], eax
+
+    ; width at 0x12, height at 0x14 (words)
+    mov ax, [0x5200 + 0x12]
+    movzx eax, ax
+    mov [0x6004], eax
+    mov ax, [0x5200 + 0x14]
+    movzx eax, ax
+    mov [0x6008], eax
+
+    ; pitch at 0x10 (word)
+    mov ax, [0x5200 + 0x10]
+    movzx eax, ax
+    mov [0x600C], eax
+
+    ; bpp at 0x19 (byte)
+    mov al, [0x5200 + 0x19]
+    mov [0x6010], al
+
+    pop es
+    popa
+    clc
+    ret
+
+.fail:
+    pop es
+    popa
+    stc
+    ret
+
+; ------------------------------------------------------------
 ; VGA string printer
 ; ------------------------------------------------------------
 vga_print:
@@ -353,6 +486,9 @@ msg_kernel_loaded:  db "stage2: kernel staged at 0x10000", 13, 10, 0
 msg_e820:          db "stage2: querying E820", 13, 10, 0
 msg_e820_ok:       db "stage2: E820 stored at 0x7000", 13, 10, 0
 msg_e820_err:      db "stage2: E820 query failed", 13, 10, 0
+msg_vbe:           db "stage2: querying VBE", 13, 10, 0
+msg_vbe_ok:        db "stage2: VBE mode set 1024x768x32", 13, 10, 0
+msg_vbe_err:       db "stage2: VBE failed", 13, 10, 0
 msg_a20:            db "stage2: A20 enabled, entering PM", 13, 10, 0
 msg_disk_err:       db "stage2: disk read failed", 13, 10, 0
 

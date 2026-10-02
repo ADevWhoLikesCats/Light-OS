@@ -4,6 +4,8 @@
 #include "idt.h"
 #include "gdt.h"
 #include "syscall.h"
+#include "framebuffer.h"
+#include "keyboard.h"
 #include "pic.h"
 #include "pit.h"
 #include "pmm.h"
@@ -242,18 +244,33 @@ void _start(void)
     heap_stats();
 
     /* Spawn two threads and start the scheduler. */
-    extern void scheduler_start(void);
-    scheduler_init();
 
-    thread_create(thread_a, "A");
-    thread_create(thread_b, "B");
+kputs("mykernel: fb_init...\n");
+    fb_init();
 
-    kputs("mykernel: entering userspace\n");
-    enter_userspace();
+    /* Quick visual test: fill the screen with colors. */
+    fb_clear(FB_BLACK);
+    fb_fill_rect(  0,   0, 200, 200, FB_RED);
+    fb_fill_rect(200,   0, 200, 200, FB_GREEN);
+    fb_fill_rect(400,   0, 200, 200, FB_BLUE);
+    fb_fill_rect(  0, 200, 600, 200, FB_YELLOW);
+    fb_fill_rect(  0, 400, 600, 100, FB_WHITE);
+    kputs("mykernel: fb test drawn\n");
+    kputs("mykernel: idle loop, type on the keyboard\n");
 
-    kputs("mykernel: starting scheduler\n");
-    scheduler_start();
-
-    /* Should never return. */
+    for (;;) {
+        __asm__ volatile("hlt");
+        char c = keyboard_poll();
+        if (c) {
+            serial_print("key: ");
+            if (c == '\n')      serial_print("<enter>");
+            else if (c == '\b') serial_print("<backspace>");
+            else if (c == '\t') serial_print("<tab>");
+            else if (c == 27)    serial_print("<esc>");
+            else                 serial_putc(c);
+            serial_print("\n");
+        }
+    }
+/* Should never return. */
     for (;;) __asm__ volatile("hlt");
 }
