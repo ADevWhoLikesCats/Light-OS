@@ -20,6 +20,8 @@ SECTIONS
     .bss : ALIGN(4096) {
         *(COMMON)
         *(.bss .bss.*)
+        . = ALIGN(4096);
+        __kernel_end = .;
     }
 
     /DISCARD/ : {

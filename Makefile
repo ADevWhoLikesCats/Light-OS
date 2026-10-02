@@ -97,11 +97,20 @@ $(BUILD_DIR)/pit.o: $(KERN_DIR)/pit.c $(KERN_DIR)/pit.h | dirs
 $(BUILD_DIR)/irq.o: $(KERN_DIR)/irq.asm | dirs
 	$(AS) $(ASFLAGS_ELF) $< -o $@
 
+$(BUILD_DIR)/pmm.o: $(KERN_DIR)/pmm.c $(KERN_DIR)/pmm.h $(KERN_DIR)/memmap.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/vmm.o: $(KERN_DIR)/vmm.c $(KERN_DIR)/vmm.h $(KERN_DIR)/pmm.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/heap.o: $(KERN_DIR)/heap.c $(KERN_DIR)/heap.h $(KERN_DIR)/vmm.h $(KERN_DIR)/pmm.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/isr.o: $(KERN_DIR)/isr.asm | dirs
 	$(AS) $(ASFLAGS_ELF) $< -o $@
 
 # ---- Kernel ELF link ----
-$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(KERN_DIR)/linker.ld
+$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o $(BUILD_DIR)/heap.o $(KERN_DIR)/linker.ld
 	$(LD) $(LDFLAGS) \
 		$(BUILD_DIR)/main.o \
 		$(BUILD_DIR)/idt.o \
@@ -109,6 +118,9 @@ $(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD
 		$(BUILD_DIR)/pic.o \
 		$(BUILD_DIR)/pit.o \
 		$(BUILD_DIR)/irq.o \
+		$(BUILD_DIR)/pmm.o \
+		$(BUILD_DIR)/vmm.o \
+		$(BUILD_DIR)/heap.o \
 		-o $@
 
 # ---- Kernel raw binary (objcopy + pad to KERNEL_SECTORS * 512) ----

@@ -57,6 +57,25 @@ stage2_start:
     mov si, msg_kernel_loaded
     call serial_print
 
+    ; ---- E820 memory map query ----
+    mov si, msg_e820
+    call serial_print
+
+    call e820_query
+    jc   e820_failed
+
+    mov si, msg_e820_ok
+    call serial_print
+    jmp  e820_done
+
+e820_failed:
+    mov si, msg_e820_err
+    call serial_print
+    cli
+    hlt
+
+e820_done:
+
     ; --- Enable A20 via port 0x92 ---
     in  al, 0x92
     or  al, 0x02
@@ -156,6 +175,58 @@ load_kernel:
 .done:
     popa
     clc
+    ret
+
+; ------------------------------------------------------------
+; e820_query — INT 15h E820, store entries at 0x7000.
+; Returns CF=1 on failure.
+; ------------------------------------------------------------
+e820_query:
+    pusha
+
+    mov ax, 0x0000
+    mov es, ax
+    mov di, 0x7008
+
+    xor ebx, ebx
+    xor bp, bp
+
+.loop:
+    mov eax, 0xE820
+    mov edx, 0x534D4150
+    mov ecx, 24
+    int 0x15
+
+    jc  .done
+
+    cmp eax, 0x534D4150
+    jne .fail
+
+    add di, 24
+    inc bp
+
+    cmp bp, 32
+    jae .done
+
+    test ebx, ebx
+    jz   .done
+
+    cmp di, 0x7008 + 32*24
+    jb  .loop
+
+.done:
+    mov ax, 0x0000
+    mov es, ax
+    mov [0x7000], bp
+    mov word [0x7002], 0
+
+    popa
+    clc
+    ret
+
+.fail:
+    popa
+    stc
     ret
 
 ; ------------------------------------------------------------
@@ -279,6 +350,9 @@ dst_off:            dw 0
 msg_vga:            db "stage2: alive (VGA)", 0
 msg_serial:         db "stage2: alive (serial)", 13, 10, 0
 msg_kernel_loaded:  db "stage2: kernel staged at 0x10000", 13, 10, 0
+msg_e820:          db "stage2: querying E820", 13, 10, 0
+msg_e820_ok:       db "stage2: E820 stored at 0x7000", 13, 10, 0
+msg_e820_err:      db "stage2: E820 query failed", 13, 10, 0
 msg_a20:            db "stage2: A20 enabled, entering PM", 13, 10, 0
 msg_disk_err:       db "stage2: disk read failed", 13, 10, 0
 

@@ -4,6 +4,10 @@
 #include "idt.h"
 #include "pic.h"
 #include "pit.h"
+#include "pmm.h"
+#include "vmm.h"
+#include "heap.h"
+#include "serial.h"
 
 #define VGA_BASE   0xB8000ULL
 #define VGA_COLS   80
@@ -28,7 +32,7 @@ static inline uint8_t inb(uint16_t port)
     return v;
 }
 
-static void serial_init(void)
+void serial_init(void)
 {
     outb(COM1 + 1, 0x00);
     outb(COM1 + 3, 0x80);
@@ -39,10 +43,15 @@ static void serial_init(void)
     outb(COM1 + 4, 0x0B);
 }
 
-static void serial_putc(char c)
+void serial_putc(char c)
 {
     while (!(inb(COM1 + 5) & 0x20)) { }
     outb(COM1, (uint8_t)c);
+}
+
+void serial_print(const char *s)
+{
+    while (*s) serial_putc(*s++);
 }
 
 static void vga_putc(char c)
@@ -63,6 +72,17 @@ static void vga_putc(char c)
     }
     if (vga_row >= VGA_ROWS) {
         vga_row = 0;   /* simple wraparound, no scroll */
+    }
+}
+
+
+void serial_hex(uint64_t v)
+{
+    serial_putc('0');
+    serial_putc('x');
+    for (int i = 60; i >= 0; i -= 4) {
+        int d = (v >> i) & 0xF;
+        serial_putc(d < 10 ? '0' + d : 'a' + d - 10);
     }
 }
 
@@ -101,6 +121,95 @@ void _start(void)
     kputs("mykernel: enabling interrupts\n");
     __asm__ volatile("sti");
     kputs("mykernel: interrupts enabled, waiting for ticks\n");
+
+    kputs("mykernel: pmm_init...\n");
+    pmm_init();
+
+    serial_print("mykernel: total pages = ");
+    serial_hex(pmm_total_pages());
+    serial_print(", free = ");
+    serial_hex(pmm_free_pages());
+    serial_print("\n");
+
+    void *p1 = pmm_alloc_page();
+    void *p2 = pmm_alloc_page();
+    void *p3 = pmm_alloc_page();
+    serial_print("alloc: ");
+    serial_hex((uint64_t)p1); serial_print(" ");
+    serial_hex((uint64_t)p2); serial_print(" ");
+    serial_hex((uint64_t)p3); serial_print("\n");
+
+    pmm_free_page(p2);
+    void *p4 = pmm_alloc_page();
+    serial_print("after free, alloc: ");
+    serial_hex((uint64_t)p4); serial_print("\n");
+
+    kputs("mykernel: vmm_init...\n");
+    vmm_init();
+    kputs("mykernel: vmm_init returned\n");
+
+    void *phys = pmm_alloc_page();
+    serial_print("vmm test: phys page = ");
+    serial_hex((uint64_t)phys);
+    serial_print("\n");
+
+    uint64_t virt = VMM_BASE;
+    vmm_map_page(virt, (uint64_t)phys, PTE_WRITE);
+
+    volatile char *vp = (volatile char *)virt;
+    vp[0] = 'H';
+    vp[1] = 'i';
+    vp[2] = '!';
+    vp[3] = 0;
+
+    serial_print("vmm test: at 0x40000000 = ");
+    serial_print((const char *)virt);
+    serial_print("\n");
+
+    vmm_unmap_page(virt);
+    serial_print("vmm test: unmapped\n");
+
+    kputs("mykernel: heap_init...\n");
+    heap_init();
+    kputs("mykernel: heap_init returned\n");
+
+    void *ha = kmalloc(100);
+    void *hb = kmalloc(200);
+    void *hc = kmalloc(50);
+
+    serial_print("kmalloc: a=");
+    serial_hex((uint64_t)ha);
+    serial_print(" b=");
+    serial_hex((uint64_t)hb);
+    serial_print(" c=");
+    serial_hex((uint64_t)hc);
+    serial_print("\n");
+
+    for (int i = 0; i < 100; i++) ((char *)ha)[i] = (char)i;
+    for (int i = 0; i < 200; i++) ((char *)hb)[i] = (char)(i ^ 0xAA);
+    for (int i = 0; i < 50;  i++) ((char *)hc)[i] = (char)(i + 1);
+
+    int ok = 1;
+    for (int i = 0; i < 100; i++) if (((char *)ha)[i] != (char)i)        ok = 0;
+    for (int i = 0; i < 200; i++) if (((char *)hb)[i] != (char)(i^0xAA)) ok = 0;
+    for (int i = 0; i < 50;  i++) if (((char *)hc)[i] != (char)(i + 1))  ok = 0;
+
+    serial_print("heap test: patterns ");
+    serial_print(ok ? "OK" : "CORRUPT");
+    serial_print("\n");
+
+    heap_stats();
+
+    kfree(hb);
+    serial_print("after kfree(b):\n");
+    heap_stats();
+
+    void *hd = kmalloc(150);
+    serial_print("kmalloc(150) after free: ");
+    serial_hex((uint64_t)hd);
+    serial_print("\n");
+
+    heap_stats();
 
     uint64_t last = 0;
     for (;;) {
