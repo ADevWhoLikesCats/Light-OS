@@ -2,11 +2,17 @@
 
 #include <stdint.h>
 #include "idt.h"
+#include "gdt.h"
+#include "syscall.h"
 #include "pic.h"
 #include "pit.h"
 #include "pmm.h"
 #include "vmm.h"
 #include "heap.h"
+#include "thread.h"
+
+static void thread_a(void);
+static void thread_b(void);
 #include "serial.h"
 
 #define VGA_BASE   0xB8000ULL
@@ -95,6 +101,25 @@ static void kputs(const char *s)
     }
 }
 
+
+static void thread_a(void)
+{
+    for (;;) {
+        serial_putc('A');
+        serial_putc('\n');
+        for (volatile int i = 0; i < 2000000; i++) { }
+    }
+}
+
+static void thread_b(void)
+{
+    for (;;) {
+        serial_putc('B');
+        serial_putc('\n');
+        for (volatile int i = 0; i < 2000000; i++) { }
+    }
+}
+
 __attribute__((section(".text._start"), used))
 void _start(void)
 {
@@ -102,8 +127,13 @@ void _start(void)
 
     kputs("mykernel: booted on custom bootloader\n");
     kputs("mykernel: running in 64-bit long mode\n");
-    kputs("mykernel: installing IDT...\n");
+    kputs("mykernel: installing GDT+TSS...\n");
+    gdt_init();
 
+    kputs("mykernel: syscall_init...\n");
+    syscall_init();
+
+    kputs("mykernel: installing IDT...\n");
     idt_init();
     kputs("mykernel: IDT installed\n");
 
@@ -211,15 +241,19 @@ void _start(void)
 
     heap_stats();
 
-    uint64_t last = 0;
-    for (;;) {
-        __asm__ volatile("hlt");
-        uint64_t now = pit_ticks();
-        if (now != last) {
-            last = now;
-            if ((now % 100) == 0) {
-                serial_putc('.');
-            }
-        }
-    }
+    /* Spawn two threads and start the scheduler. */
+    extern void scheduler_start(void);
+    scheduler_init();
+
+    thread_create(thread_a, "A");
+    thread_create(thread_b, "B");
+
+    kputs("mykernel: entering userspace\n");
+    enter_userspace();
+
+    kputs("mykernel: starting scheduler\n");
+    scheduler_start();
+
+    /* Should never return. */
+    for (;;) __asm__ volatile("hlt");
 }

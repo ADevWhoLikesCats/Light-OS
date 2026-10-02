@@ -106,11 +106,35 @@ $(BUILD_DIR)/vmm.o: $(KERN_DIR)/vmm.c $(KERN_DIR)/vmm.h $(KERN_DIR)/pmm.h | dirs
 $(BUILD_DIR)/heap.o: $(KERN_DIR)/heap.c $(KERN_DIR)/heap.h $(KERN_DIR)/vmm.h $(KERN_DIR)/pmm.h | dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/thread.o: $(KERN_DIR)/thread.c $(KERN_DIR)/thread.h $(KERN_DIR)/heap.h $(KERN_DIR)/vmm.h $(KERN_DIR)/pmm.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/gdt.o: $(KERN_DIR)/gdt.c $(KERN_DIR)/gdt.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/syscall.o: $(KERN_DIR)/syscall.c $(KERN_DIR)/syscall.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/elf.o: $(KERN_DIR)/elf.c $(KERN_DIR)/elf.h | dirs
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/syscall_entry.o: $(KERN_DIR)/syscall_entry.asm | dirs
+	$(AS) $(ASFLAGS_ELF) $< -o $@
+
+$(BUILD_DIR)/userspace.o: $(KERN_DIR)/userspace.asm | dirs
+	$(AS) $(ASFLAGS_ELF) $< -o $@
+
+$(BUILD_DIR)/gdt_load.o: $(KERN_DIR)/gdt_load.asm | dirs
+	$(AS) $(ASFLAGS_ELF) $< -o $@
+
+$(BUILD_DIR)/switch.o: $(KERN_DIR)/switch.asm | dirs
+	$(AS) $(ASFLAGS_ELF) $< -o $@
+
 $(BUILD_DIR)/isr.o: $(KERN_DIR)/isr.asm | dirs
 	$(AS) $(ASFLAGS_ELF) $< -o $@
 
 # ---- Kernel ELF link ----
-$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o $(BUILD_DIR)/heap.o $(KERN_DIR)/linker.ld
+$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o $(BUILD_DIR)/heap.o $(BUILD_DIR)/thread.o $(BUILD_DIR)/switch.o $(BUILD_DIR)/gdt.o $(BUILD_DIR)/gdt_load.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/syscall_entry.o $(BUILD_DIR)/userspace.o $(BUILD_DIR)/elf.o $(KERN_DIR)/linker.ld
 	$(LD) $(LDFLAGS) \
 		$(BUILD_DIR)/main.o \
 		$(BUILD_DIR)/idt.o \
@@ -121,6 +145,14 @@ $(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD
 		$(BUILD_DIR)/pmm.o \
 		$(BUILD_DIR)/vmm.o \
 		$(BUILD_DIR)/heap.o \
+		$(BUILD_DIR)/thread.o \
+		$(BUILD_DIR)/switch.o \
+		$(BUILD_DIR)/gdt.o \
+		$(BUILD_DIR)/gdt_load.o \
+		$(BUILD_DIR)/syscall.o \
+		$(BUILD_DIR)/syscall_entry.o \
+		$(BUILD_DIR)/userspace.o \
+		$(BUILD_DIR)/elf.o \
 		-o $@
 
 # ---- Kernel raw binary (objcopy + pad to KERNEL_SECTORS * 512) ----

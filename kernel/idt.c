@@ -59,7 +59,7 @@ static void serial_hex(uint64_t v)
 static void idt_set_gate(int n, uint64_t handler)
 {
     idt[n].offset_low  = handler & 0xFFFF;
-    idt[n].selector    = 0x18;          /* kernel code segment */
+    idt[n].selector = 0x08;          /* kernel code segment */
     idt[n].ist         = 0;             /* no IST for now */
     idt[n].type_attr   = 0x8E;          /* present, ring 0, interrupt gate */
     idt[n].offset_mid  = (handler >> 16) & 0xFFFF;
@@ -176,4 +176,9 @@ void irq_handler(struct regs *r)
 
     extern void pic_send_eoi(uint8_t irq);
     pic_send_eoi(irq);
+
+    if (irq == 0) {
+        extern void scheduler_tick(void);
+        scheduler_tick();
+    }
 }

@@ -67,6 +67,48 @@ int vmm_map_page(uint64_t virt, uint64_t phys, uint64_t flags)
     return 0;
 }
 
+
+/* Same as vmm_map_page but forces USER bit in intermediate tables
+   AND in the leaf PTE. Required for ring-3 access. */
+int vmm_map_page_user(uint64_t virt, uint64_t phys, uint64_t flags)
+{
+    if (virt < VMM_BASE || virt >= VMM_LIMIT) return -1;
+
+    /* Walk + create with USER set on intermediate entries. */
+    uint64_t pml4_idx = (virt >> 39) & 0x1FF;
+    uint64_t pdpt_idx = (virt >> 30) & 0x1FF;
+    uint64_t pd_idx   = (virt >> 21) & 0x1FF;
+
+    uint64_t pml4_phys = read_cr3() & ~0xFFFULL;
+    uint64_t *pml4 = (uint64_t *)pml4_phys;
+    if (!(pml4[pml4_idx] & PTE_PRESENT)) return -1;
+    pml4[pml4_idx] |= PTE_USER | PTE_WRITE;
+
+    uint64_t *pdpt = (uint64_t *)(pml4[pml4_idx] & ~0xFFFULL);
+    if (!(pdpt[pdpt_idx] & PTE_PRESENT)) {
+        uint64_t new_pd = (uint64_t)pmm_alloc_page();
+        if (!new_pd) return -1;
+        for (int i = 0; i < 512; i++) ((uint64_t *)new_pd)[i] = 0;
+        pdpt[pdpt_idx] = new_pd | PTE_PRESENT | PTE_WRITE | PTE_USER;
+    }
+    pdpt[pdpt_idx] |= PTE_USER | PTE_WRITE;
+
+    uint64_t *pd = (uint64_t *)(pdpt[pdpt_idx] & ~0xFFFULL);
+    if (!(pd[pd_idx] & PTE_PRESENT)) {
+        uint64_t new_pt = (uint64_t)pmm_alloc_page();
+        if (!new_pt) return -1;
+        for (int i = 0; i < 512; i++) ((uint64_t *)new_pt)[i] = 0;
+        pd[pd_idx] = new_pt | PTE_PRESENT | PTE_WRITE | PTE_USER;
+    }
+    pd[pd_idx] |= PTE_USER | PTE_WRITE;
+
+    uint64_t *pt = (uint64_t *)(pd[pd_idx] & ~0xFFFULL);
+    uint64_t pt_idx = (virt >> 12) & 0x1FF;
+    pt[pt_idx] = (phys & ~0xFFFULL) | (flags & 0xFFF) | PTE_PRESENT | PTE_USER;
+    invlpg(virt);
+    return 0;
+}
+
 void vmm_unmap_page(uint64_t virt)
 {
     if (virt < VMM_BASE || virt >= VMM_LIMIT) return;
