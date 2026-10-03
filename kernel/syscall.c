@@ -3,6 +3,7 @@
 #include "keyboard.h"
 #include "console.h"
 #include "vfs.h"
+#include "mm.h"
 #include "vmm.h"
 #include "pmm.h"
 #include "heap.h"
@@ -153,6 +154,90 @@ uint64_t syscall_handler(struct syscall_regs *r)
             (void)fd; (void)buf; (void)count;
             return (uint64_t)-1;   /* TODO: implement */
         }
+        case SYS_brk: {
+            uint64_t new_brk = mm_brk(r->rdi);
+            return new_brk;
+        }
+        case SYS_mmap: {
+            uint64_t addr   = r->rdi;
+            uint64_t length = r->rsi;
+            uint64_t prot   = r->rdx;
+            uint64_t flags  = r->r10;
+            int      fd     = (int)r->r8;
+            uint64_t off    = r->r9;
+            uint64_t v = mm_mmap(addr, length, prot, flags, fd, off);
+            return v;
+        }
+        case SYS_munmap: {
+            int rv = mm_munmap(r->rdi, r->rsi);
+            return (rv < 0) ? (uint64_t)-1 : 0;
+        }
+        case SYS_mprotect: {
+            /* accept and ignore for now */
+            return 0;
+        }
+        case SYS_getpid:  return 1;
+        case SYS_getppid: return 0;
+        case SYS_gettid:  return 1;
+        case SYS_getuid:  return 0;
+        case SYS_getgid:  return 0;
+        case SYS_geteuid: return 0;
+        case SYS_getegid: return 0;
+        case SYS_arch_prctl: {
+            /* arch_prctl(ARCH_SET_FS=0x1002, addr) or ARCH_GET_FS=0x1003 */
+            uint64_t code = r->rdi;
+            uint64_t addr = r->rsi;
+            if (code == 0x1002) {
+                /* set FS base */
+                __asm__ volatile("wrmsr" :: "c"(0xC0000100),
+                                 "a"((uint32_t)addr),
+                                 "d"((uint32_t)(addr >> 32)));
+                return 0;
+            } else if (code == 0x1003) {
+                /* get FS base */
+                uint32_t lo, hi;
+                __asm__ volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(0xC0000100));
+                uint64_t fsbase = ((uint64_t)hi << 32) | lo;
+                *(uint64_t *)addr = fsbase;
+                return 0;
+            }
+            return (uint64_t)-22;   /* -EINVAL */
+        }
+        case SYS_set_tid_address: return 1;
+        case SYS_set_robust_list: return 0;
+        case SYS_rseq:            return 0;
+        case SYS_futex:           return 0;   /* stub — no threads yet */
+        case SYS_exit_group:
+            serial_print("sys: exit_group\n");
+            return 0;
+        case SYS_getrandom: {
+            /* Fill the buffer with pseudo-random bytes derived from a counter. */
+            static uint64_t seed = 0x123456789ABCDEF0ULL;
+            uint8_t *buf = (uint8_t *)r->rdi;
+            uint64_t n   = r->rsi;
+            for (uint64_t i = 0; i < n; i++) {
+                seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+                buf[i] = (uint8_t)(seed >> 33);
+            }
+            return n;
+        }
+        case SYS_prlimit64: {
+            /* prlimit64(pid, resource, new, old) */
+            uint64_t oldp = r->r10;
+            if (oldp) {
+                /* zero the rlimit struct — 16 bytes */
+                uint64_t *p = (uint64_t *)oldp;
+                p[0] = 0xFFFFFFFFFFFFFFFFULL;
+                p[1] = 0xFFFFFFFFFFFFFFFFULL;
+            }
+            return 0;
+        }
+        case SYS_stat:
+        case SYS_fstat:
+        case SYS_ioctl:
+        case SYS_getcwd:
+            return (uint64_t)-38;   /* -ENOSYS for now */
+
         case SYS_exit:
             serial_print("sys: exit\n");
             return 0;

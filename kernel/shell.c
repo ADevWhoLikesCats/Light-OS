@@ -5,6 +5,9 @@
 #include "syscall.h"
 #include "serial.h"
 #include "cat_elf.h"
+#include "memtest_elf.h"
+
+void enter_userspace_elf(const void *elf, uint64_t len);
 
 #define LINE_MAX 128
 
@@ -86,6 +89,7 @@ static void cmd_help(void)
     console_puts("  clear        clear screen\n");
     console_puts("  peek         report kernel state\n");
     console_puts("  runelf       run embedded cat.elf in userspace\n");
+    console_puts("  runmem       run embedded memtest.elf in userspace\n");
 }
 
 static void cmd_echo(int argc, char **argv)
@@ -124,6 +128,13 @@ static void cmd_cat(int argc, char **argv)
     vfs_close(fd);
 }
 
+static void cmd_runmem(void)
+{
+    console_puts("runmem: loading embedded memtest.elf\n");
+    enter_userspace_elf(memtest_elf, memtest_elf_len);
+    console_puts("runmem: returned\n");
+}
+
 static void cmd_runelf(void)
 {
     console_puts("runelf: loading embedded cat.elf (");
@@ -133,7 +144,6 @@ static void cmd_runelf(void)
 
     /* Map + jump using a modified enter_userspace path.
        For simplicity we invoke the existing syscall API. */
-    extern void enter_userspace_elf(const void *elf, uint64_t len);
     {
         volatile const unsigned char *p = (volatile const unsigned char *)0x108600;
         serial_print("v: [0x108600]=");
@@ -179,6 +189,7 @@ static void run_command(int argc, char **argv)
     if (!strcmp_(argv[0], "clear")) { cmd_clear();  return; }
     if (!strcmp_(argv[0], "peek"))  { cmd_peek();   return; }
     if (!strcmp_(argv[0], "runelf")){ cmd_runelf(); return; }
+    if (!strcmp_(argv[0], "runmem")){ cmd_runmem(); return; }
 
     console_puts("unknown command: ");
     console_puts(argv[0]);
