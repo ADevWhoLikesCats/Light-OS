@@ -4,6 +4,11 @@
 #include "console.h"
 #include "vfs.h"
 #include "mm.h"
+
+extern void exit_ctx_save(uint64_t *ctx);
+extern void exit_ctx_restore(uint64_t *ctx);
+
+static uint64_t exit_ctx[8];
 #include "vmm.h"
 #include "pmm.h"
 #include "heap.h"
@@ -208,8 +213,9 @@ uint64_t syscall_handler(struct syscall_regs *r)
         case SYS_rseq:            return 0;
         case SYS_futex:           return 0;   /* stub — no threads yet */
         case SYS_exit_group:
-            serial_print("sys: exit_group\n");
-            return 0;
+            exit_ctx_restore(exit_ctx);
+            /* unreachable */
+            for (;;) __asm__ volatile("hlt");
         case SYS_getrandom: {
             /* Fill the buffer with pseudo-random bytes derived from a counter. */
             static uint64_t seed = 0x123456789ABCDEF0ULL;
@@ -239,8 +245,9 @@ uint64_t syscall_handler(struct syscall_regs *r)
             return (uint64_t)-38;   /* -ENOSYS for now */
 
         case SYS_exit:
-            serial_print("sys: exit\n");
-            return 0;
+            exit_ctx_restore(exit_ctx);
+            /* unreachable */
+            for (;;) __asm__ volatile("hlt");
 
         default:
             serial_print("syscall: unknown ");

@@ -153,11 +153,14 @@ $(BUILD_DIR)/switch.o: $(KERN_DIR)/switch.asm | dirs
 $(BUILD_DIR)/isr.o: $(KERN_DIR)/isr.asm | dirs
 	$(AS) $(ASFLAGS_ELF) $< -o $@
 
+$(BUILD_DIR)/exit_ctx.o: $(KERN_DIR)/exit_ctx.asm | dirs
+	$(AS) $(ASFLAGS_ELF) $< -o $@
+
 $(BUILD_DIR)/mm.o: $(KERN_DIR)/mm.c $(KERN_DIR)/mm.h $(KERN_DIR)/vmm.h $(KERN_DIR)/pmm.h | dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # ---- Kernel ELF link ----
-$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o $(BUILD_DIR)/heap.o $(BUILD_DIR)/thread.o $(BUILD_DIR)/switch.o $(BUILD_DIR)/gdt.o $(BUILD_DIR)/gdt_load.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/syscall_entry.o $(BUILD_DIR)/userspace.o $(BUILD_DIR)/elf.o $(BUILD_DIR)/framebuffer.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/console.o $(BUILD_DIR)/vfs.o $(BUILD_DIR)/initramfs.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/mm.o $(KERN_DIR)/linker.ld
+$(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD_DIR)/pic.o $(BUILD_DIR)/pit.o $(BUILD_DIR)/irq.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o $(BUILD_DIR)/heap.o $(BUILD_DIR)/thread.o $(BUILD_DIR)/switch.o $(BUILD_DIR)/gdt.o $(BUILD_DIR)/gdt_load.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/syscall_entry.o $(BUILD_DIR)/userspace.o $(BUILD_DIR)/elf.o $(BUILD_DIR)/framebuffer.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/console.o $(BUILD_DIR)/vfs.o $(BUILD_DIR)/initramfs.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/mm.o $(BUILD_DIR)/exit_ctx.o $(KERN_DIR)/linker.ld
 	$(LD) $(LDFLAGS) \
 		$(BUILD_DIR)/main.o \
 		$(BUILD_DIR)/idt.o \
@@ -183,6 +186,7 @@ $(KERNEL_ELF): $(BUILD_DIR)/main.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/isr.o $(BUILD
 		$(BUILD_DIR)/initramfs.o \
 		$(BUILD_DIR)/shell.o \
 		$(BUILD_DIR)/mm.o \
+		$(BUILD_DIR)/exit_ctx.o \
 		-o $@
 
 # ---- Kernel raw binary (objcopy + pad to KERNEL_SECTORS * 512) ----

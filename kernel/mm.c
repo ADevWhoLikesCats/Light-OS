@@ -24,6 +24,12 @@ void mm_init(void)
 
 uint64_t mm_brk(uint64_t new_brk)
 {
+    /* Lazy init in case mm_init wasn't called. */
+    if (brk_current == 0) {
+        brk_start = 0x50000000ULL;
+        brk_current = brk_start;
+    }
+
     if (new_brk == 0) return brk_current;
 
     /* Grow: allocate pages and map them. */

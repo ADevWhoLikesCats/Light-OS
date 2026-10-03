@@ -14,6 +14,7 @@
 #include "keyboard.h"
 #include "console.h"
 #include "vfs.h"
+#include "mm.h"
 #include "shell.h"
 #include "serial.h"
 
