@@ -1,9 +1,7 @@
 #include "elf.h"
 #include "vmm.h"
 #include "pmm.h"
-#include "serial.h"
 
-/* Minimal ELF64 types, no libc. */
 #define EI_NIDENT 16
 
 typedef struct {
@@ -38,33 +36,17 @@ typedef struct {
 #define PF_X 1
 #define PF_W 2
 #define PF_R 4
-
 #define PAGE_SIZE 4096
 
 uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
 {
     const uint8_t *base = (const uint8_t *)elf_data;
 
-
-
-
-
-    /* Sanity: size must at least fit the header */
-    if (elf_size < sizeof(Elf64_Ehdr)) {
-        return 0;
-    }
-
-    /* Magic check */
-    if (base[0] != 0x7F || base[1] != 'E' || base[2] != 'L' || base[3] != 'F') {
-        return 0;
-    }
-    if (base[4] != 2 || base[5] != 1) {
-        return 0;
-    }
+    if (elf_size < sizeof(Elf64_Ehdr)) return 0;
+    if (base[0] != 0x7F || base[1] != 'E' || base[2] != 'L' || base[3] != 'F') return 0;
+    if (base[4] != 2 || base[5] != 1) return 0;
 
     const Elf64_Ehdr *eh = (const Elf64_Ehdr *)base;
-
-
     const Elf64_Phdr *ph = (const Elf64_Phdr *)(base + eh->e_phoff);
 
     for (uint16_t i = 0; i < eh->e_phnum; i++) {
@@ -76,10 +58,6 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
         uint64_t filesz = p->p_filesz;
         uint64_t offset = p->p_offset;
 
-
-
-
-        /* Page-align the range. */
         uint64_t page_start = vaddr & ~0xFFFULL;
         uint64_t page_end   = (vaddr + memsz + 0xFFF) & ~0xFFFULL;
         uint64_t npages     = (page_end - page_start) / PAGE_SIZE;
@@ -87,14 +65,11 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
         for (uint64_t pg = 0; pg < npages; pg++) {
             uint64_t page_va = page_start + pg * PAGE_SIZE;
             void *phys = pmm_alloc_page();
-            if (!phys) {
-                return 0;
-            }
-            /* Zero the page so BSS and partial-file regions are clean. */
+            if (!phys) return 0;
+
             uint8_t *dst = (uint8_t *)phys;
             for (int j = 0; j < PAGE_SIZE; j++) dst[j] = 0;
 
-            /* Copy the portion of the file that lives in this page. */
             for (int j = 0; j < PAGE_SIZE; j++) {
                 uint64_t abs_va = page_va + j;
                 if (abs_va < vaddr) continue;
@@ -104,17 +79,10 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
                 dst[j] = base[file_off];
             }
 
-            {
-            }
-
-            /* Map with USER access. Writable if PF_W. */
-            uint64_t flags = PTE_WRITE;   /* simplest: always writable for now */
-            if (p->p_flags & PF_W) flags = PTE_WRITE;
-            if (vmm_map_page_user(page_va, (uint64_t)phys, flags) != 0) {
+            if (vmm_map_page_user(page_va, (uint64_t)phys, PTE_WRITE) != 0) {
                 return 0;
             }
         }
     }
-
     return eh->e_entry + load_bias;
 }

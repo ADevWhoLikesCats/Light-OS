@@ -11,5 +11,5 @@ cpu = 'x86_64'
 endian = 'little'
 
 [properties]
-c_args = ['-D__mykernel__=1',]
-cpp_args = ['-D__mykernel__=1',]
+c_args = ['-D_GNU_SOURCE', '-D__mykernel__=1', '-DMLIBC_ARCH_HAS_STRCMP=0', '-DMLIBC_ARCH_HAS_STRLEN=0', '-D__INT_FAST8_TYPE__=signed char', '-D__INT_FAST16_TYPE__=long int', '-D__INT_FAST32_TYPE__=long int', '-D__INT_FAST64_TYPE__=long int', '-D__UINT_FAST8_TYPE__=unsigned char', '-D__UINT_FAST16_TYPE__=long unsigned int', '-D__UINT_FAST32_TYPE__=long unsigned int', '-D__UINT_FAST64_TYPE__=long unsigned int']
+cpp_args = ['-D_GNU_SOURCE', '-D__mykernel__=1', '-DMLIBC_ARCH_HAS_STRCMP=0', '-DMLIBC_ARCH_HAS_STRLEN=0', '-D__INT_FAST8_TYPE__=signed char', '-D__INT_FAST16_TYPE__=long int', '-D__INT_FAST32_TYPE__=long int', '-D__INT_FAST64_TYPE__=long int', '-D__UINT_FAST8_TYPE__=unsigned char', '-D__UINT_FAST16_TYPE__=long unsigned int', '-D__UINT_FAST32_TYPE__=long unsigned int', '-D__UINT_FAST64_TYPE__=long unsigned int']
