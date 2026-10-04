@@ -137,16 +137,6 @@ load_kernel:
     test ax, ax
     jz   .done
 
-    ; If dst_off + 512 would exceed 0x10000, bump segment first.
-    mov ax, [dst_off]
-    add ax, 512
-    jnc .have_segment
-    mov ax, [dst_seg]
-    add ax, 0x1000
-    mov [dst_seg], ax
-    mov word [dst_off], 0
-.have_segment:
-
     ; --- compute CHS for cur_lba ---
     mov ax, [cur_lba]
     xor dx, dx
@@ -185,6 +175,11 @@ load_kernel:
     mov ax, [dst_off]
     add ax, 512
     mov [dst_off], ax
+    jnc .loop
+    ; dst_off wrapped — bump dst_seg
+    mov ax, [dst_seg]
+    add ax, 0x1000
+    mov [dst_seg], ax
     jmp .loop
 
 .error:

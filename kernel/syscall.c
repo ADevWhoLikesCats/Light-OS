@@ -6,6 +6,14 @@
 #include "mm.h"
 #include "pit.h"
 
+static char kernel_cwd[256];
+static void strcpy_(char *dst, const char *s, int max) {
+    int i = 0;
+    while (s[i] && i < max - 1) { dst[i] = s[i]; i++; }
+    dst[i] = 0;
+}
+
+
 extern void exit_ctx_save(uint64_t *ctx);
 extern void exit_ctx_restore(uint64_t *ctx);
 
@@ -42,6 +50,9 @@ static inline void wrmsr(uint32_t msr, uint64_t value)
 
 void syscall_init(void)
 {
+    kernel_cwd[0] = '/';
+    kernel_cwd[1] = 0;
+
     /* Enable SCE (System Call Extension) in EFER. Without this,
        the SYSCALL instruction raises #UD. */
     uint64_t efer = rdmsr(MSR_EFER);
@@ -86,9 +97,19 @@ static int fill_stat(const struct vfs_node *n, struct mykernel_stat *st)
     return 0;
 }
 
+
 uint64_t syscall_handler(struct syscall_regs *r)
 {
     uint64_t num = r->rax;
+    if (num == 80 || num == 21 || num == 4 || num == 5) {
+        serial_print("syscall DEBUG num=");
+        serial_hex(num);
+        serial_print(" rdi=");
+        serial_hex(r->rdi);
+        serial_print(" '");
+        serial_print((const char *)r->rdi);
+        serial_print("'\n");
+    }
 
     switch (num) {
         case SYS_read: {
@@ -301,6 +322,94 @@ uint64_t syscall_handler(struct syscall_regs *r)
             }
             return 0;
         }
+        case SYS_rt_sigaction: return 0;
+        case SYS_rt_sigprocmask: return 0;
+        case SYS_rt_sigreturn:  return 0;
+
+        case SYS_uname: {
+            struct mykernel_utsname *u = (struct mykernel_utsname *)r->rdi;
+            if (!u) return (uint64_t)-14;
+            const char *sysname  = "mykernel";
+            const char *nodename = "localhost";
+            const char *release  = "0.1";
+            const char *version  = "#1 SMP";
+            const char *machine  = "x86_64";
+            const char *domain   = "(none)";
+            strcpy_(u->sysname,   sysname,  65);
+            strcpy_(u->nodename,  nodename, 65);
+            strcpy_(u->release,   release,  65);
+            strcpy_(u->version,   version,  65);
+            strcpy_(u->machine,   machine,  65);
+            strcpy_(u->domainname, domain,  65);
+            return 0;
+        }
+
+        case SYS_getcwd: {
+            char *buf = (char *)r->rdi;
+            uint64_t size = r->rsi;
+            uint64_t len = 0;
+            while (kernel_cwd[len]) len++;
+            if (size < len + 1) return (uint64_t)-34;   /* ERANGE */
+            for (uint64_t i = 0; i < len; i++) buf[i] = kernel_cwd[i];
+            buf[len] = 0;
+            return len + 1;
+        }
+
+        case SYS_chdir: {
+            const char *path = (const char *)r->rdi;
+            struct vfs_node *n = vfs_lookup(path);
+            if (!n) return (uint64_t)-2;        /* ENOENT */
+            if (n->type != VFS_DIR) return (uint64_t)-20; /* ENOTDIR */
+            strcpy_(kernel_cwd, path, 256);
+            return 0;
+        }
+
+        case SYS_access: {
+            const char *path = (const char *)r->rdi;
+            struct vfs_node *n = vfs_lookup(path);
+            return n ? 0 : (uint64_t)-2;
+        }
+
+        case SYS_readlink: {
+            /* We have no symlinks; return -EINVAL. */
+            return (uint64_t)-22;
+        }
+
+        case SYS_ioctl: {
+            /* TODO: termios, winsize. For now, not-a-tty. */
+            return (uint64_t)-25;   /* -ENOTTY */
+        }
+
+        case SYS_pipe: {
+            /* TODO: real pipe. Return ENOSYS for now. */
+            return (uint64_t)-38;
+        }
+
+        case SYS_dup: {
+            /* Stub — return a new fd that aliases the same file. */
+            int fd = (int)r->rdi;
+            struct vfs_node *n = vfs_fd_node(fd);
+            if (!n) return (uint64_t)-9;    /* EBADF */
+            /* Find a free fd >= 3 and "open" the same file at offset 0. */
+            /* Simplified: we don't actually track per-fd offsets separately. */
+            return (uint64_t)-38;   /* ENOSYS for now */
+        }
+
+        case SYS_dup2: {
+            return (uint64_t)-38;
+        }
+
+        case SYS_fcntl: {
+            /* F_GETFD=1, F_SETFD=2, F_GETFL=3, F_SETFL=4, F_DUPFD=0. */
+            int cmd = (int)r->rsi;
+            switch (cmd) {
+                case 1: return 0;               /* F_GETFD */
+                case 3: return 0;               /* F_GETFL — O_RDONLY */
+                case 2: case 4: return 0;       /* F_SETFD/F_SETFL — nop */
+                default: return (uint64_t)-22;  /* EINVAL */
+            }
+        }
+
         case SYS_exit:
             exit_ctx_restore(exit_ctx);
             /* unreachable */

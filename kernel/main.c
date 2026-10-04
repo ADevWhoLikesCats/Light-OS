@@ -78,6 +78,18 @@ void _start(void)
 {
     serial_init();
 
+    {
+        extern char initramfs_root[];
+        serial_print("EARLY CHECK initramfs_root @ ");
+        serial_hex((uint64_t)initramfs_root);
+        serial_print(" type=");
+        serial_hex(*(unsigned int *)(initramfs_root + 64));
+        serial_print(" children=");
+        serial_hex(*(uint64_t *)(initramfs_root + 96));
+        serial_print("\n");
+    }
+
+
     gdt_init();
     syscall_init();
     idt_init();

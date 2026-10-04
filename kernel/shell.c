@@ -8,6 +8,7 @@
 #include "memtest_elf.h"
 #include "stat_test_elf.h"
 #include "time_test_elf.h"
+#include "posix_test_elf.h"
 
 void enter_userspace_elf(const void *elf, uint64_t len);
 
@@ -132,6 +133,13 @@ static void cmd_cat(int argc, char **argv)
     vfs_close(fd);
 }
 
+static void cmd_runposix(void)
+{
+    console_puts("runposix: loading posix_test.elf\n");
+    enter_userspace_elf(posix_test_elf, posix_test_elf_len);
+    console_puts("runposix: returned\n");
+}
+
 static void cmd_runtime(void)
 {
     console_puts("runtime: loading embedded time_test.elf\n");
@@ -210,6 +218,7 @@ static void run_command(int argc, char **argv)
     if (!strcmp_(argv[0], "runmem")){ cmd_runmem(); return; }
     if (!strcmp_(argv[0], "runstat")){ cmd_runstat(); return; }
     if (!strcmp_(argv[0], "runtime")){ cmd_runtime(); return; }
+    if (!strcmp_(argv[0], "runposix")){ cmd_runposix(); return; }
 
     console_puts("unknown command: ");
     console_puts(argv[0]);

@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include "serial.h"
 #include "console.h"
 
 /* Root node of the in-memory filesystem. */
@@ -32,7 +33,8 @@ static int segment_matches(const char *seg, int seg_len, const char *name)
 
 struct vfs_node *vfs_lookup(const char *path)
 {
-    if (!path || path[0] != '/') return 0;
+    serial_print("VL entered\n");
+    if (!path || path[0] != '/') { serial_print("VL bad prefix\n"); return 0; }
 
     struct vfs_node *cur = &initramfs_root;
     const char *p = path + 1;
@@ -47,7 +49,16 @@ struct vfs_node *vfs_lookup(const char *path)
         while (*p && *p != '/') p++;
         int seg_len = (int)(p - start);
 
-        if (cur->type != VFS_DIR) return 0;
+        if (cur->type != VFS_DIR) {
+            serial_print("VL: not dir; cur=");
+            serial_hex((uint64_t)cur);
+            serial_print(" type=");
+            serial_hex(cur->type);
+            serial_print(" children=");
+            serial_hex((uint64_t)cur->children);
+            serial_print("\n");
+            return 0;
+        }
 
         /* Search children */
         struct vfs_node *child = cur->children;
@@ -60,7 +71,7 @@ struct vfs_node *vfs_lookup(const char *path)
             }
             child = child->next;
         }
-        if (!found) return 0;
+        if (!found) { serial_print("VL: no match\n"); return 0; }
     }
 
     return cur;

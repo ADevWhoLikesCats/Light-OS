@@ -29,6 +29,17 @@ struct mykernel_timeval {
 #define CLOCK_REALTIME   0
 #define CLOCK_MONOTONIC  1
 
+
+/* POSIX utsname. Linux x86_64 layout: 6 fields of 65 bytes each = 390 bytes. */
+struct mykernel_utsname {
+    char sysname[65];
+    char nodename[65];
+    char release[65];
+    char version[65];
+    char machine[65];
+    char domainname[65];
+};
+
 struct mykernel_stat {
     uint64_t st_dev;
     uint64_t st_ino;
@@ -56,6 +67,17 @@ void syscall_init(void);
 #define SYS_gettimeofday 96
 #define SYS_clock_gettime 228
 #define SYS_clock_getres  229
+#define SYS_rt_sigaction 13
+#define SYS_rt_sigprocmask 14
+#define SYS_rt_sigreturn 15
+#define SYS_access     21
+#define SYS_pipe       22
+#define SYS_dup        32
+#define SYS_dup2       33
+#define SYS_uname      63
+#define SYS_fcntl      72
+#define SYS_chdir      80
+#define SYS_readlink   89
 #define SYS_stat        4
 #define SYS_fstat       5
 #define SYS_lstat       6
