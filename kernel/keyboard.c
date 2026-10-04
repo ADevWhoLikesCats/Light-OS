@@ -43,7 +43,7 @@ void keyboard_init(void)
     }
     ring_head = ring_tail = 0;
     shift_down = 0;
-    serial_print("kbd: initialised\n");
+
 }
 
 void keyboard_irq(void)

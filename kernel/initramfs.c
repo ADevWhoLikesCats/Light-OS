@@ -9,16 +9,20 @@ static const uint8_t about_txt[]   = "written in C and asm, from scratch\n";
 
 /* --- Directory entries --- */
 static struct vfs_node docs_children[] = {
-    { "about.txt", VFS_FILE, sizeof(about_txt) - 1, about_txt, 0, 0 },
+    { "about.txt", VFS_FILE, VFS_MODE_FILE, 0, 0,
+      sizeof(about_txt) - 1, about_txt, 0, 0 },
 };
 
 /* --- Tree layout --- */
 static struct vfs_node root_children[] = {
-    { "hello.txt",  VFS_FILE, sizeof(hello_txt) - 1,  hello_txt,  0, &root_children[1] },
-    { "readme.txt", VFS_FILE, sizeof(readme_txt) - 1, readme_txt, 0, &root_children[2] },
-    { "docs",       VFS_DIR,  0,                      0,          docs_children, 0 },
+    { "hello.txt",  VFS_FILE, VFS_MODE_FILE, 0, 0,
+      sizeof(hello_txt) - 1,  hello_txt,  0, &root_children[1] },
+    { "readme.txt", VFS_FILE, VFS_MODE_FILE, 0, 0,
+      sizeof(readme_txt) - 1, readme_txt, 0, &root_children[2] },
+    { "docs",       VFS_DIR,  VFS_MODE_DIR,  0, 0,
+      0,                      0,          docs_children, 0 },
 };
 
 struct vfs_node initramfs_root = {
-    "/", VFS_DIR, 0, 0, root_children, 0
+    "/", VFS_DIR, VFS_MODE_DIR, 0, 0, 0, 0, root_children, 0
 };

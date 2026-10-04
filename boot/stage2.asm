@@ -13,7 +13,7 @@ ORG 0x8000
 KERNEL_STAGE_SEG   equ 0x1000
 KERNEL_STAGE_OFF   equ 0x0000
 KERNEL_LBA         equ 17
-KERNEL_SECS        equ 96
+KERNEL_SECS        equ 160
 KERNEL_FINAL       equ 0x100000     ; physical addr of kernel in long mode
 
 SECTORS_PER_TRACK  equ 18
@@ -131,17 +131,29 @@ load_kernel:
     mov word  [remaining], KERNEL_SECS
     mov word  [dst_seg], KERNEL_STAGE_SEG
     mov word  [dst_off], KERNEL_STAGE_OFF
+
 .loop:
     mov ax, [remaining]
     test ax, ax
     jz   .done
 
+    ; If dst_off + 512 would exceed 0x10000, bump segment first.
+    mov ax, [dst_off]
+    add ax, 512
+    jnc .have_segment
+    mov ax, [dst_seg]
+    add ax, 0x1000
+    mov [dst_seg], ax
+    mov word [dst_off], 0
+.have_segment:
+
+    ; --- compute CHS for cur_lba ---
     mov ax, [cur_lba]
     xor dx, dx
     mov cx, SECTORS_PER_TRACK
     div cx                          ; AX=track, DX=sect_idx
     mov bl, dl
-    inc bl                          ; BL=sector
+    inc bl                          ; BL=sector (1-based)
 
     xor dx, dx
     mov cx, HEADS
@@ -150,51 +162,41 @@ load_kernel:
     mov dh, dl
     mov cl, bl
 
-    mov al, SECTORS_PER_TRACK
-    sub al, bl
-    inc al
-    mov ah, [remaining]
-    cmp al, ah
-    jbe .have_count
-    mov al, ah
-.have_count:
-    push ax
+    ; --- read 1 sector into dst_seg:dst_off ---
     mov ax, [dst_seg]
     mov es, ax
     mov bx, [dst_off]
 
-    pop ax
     mov ah, 0x02
+    mov al, 1
     mov dl, [boot_drive]
     int 0x13
     jc  .error
 
-    movzx cx, al
+    ; --- advance state ---
     mov eax, [cur_lba]
-    add eax, ecx
+    inc eax
     mov [cur_lba], eax
 
     mov ax, [remaining]
-    sub ax, cx
+    dec ax
     mov [remaining], ax
 
-    mov ax, cx
-    shl ax, 9
-    add [dst_off], ax
-    jnc .loop
-    mov ax, [dst_seg]
-    add ax, 0x1000
-    mov [dst_seg], ax
+    mov ax, [dst_off]
+    add ax, 512
+    mov [dst_off], ax
     jmp .loop
 
 .error:
     popa
     stc
     ret
+
 .done:
     popa
     clc
     ret
+
 
 ; ------------------------------------------------------------
 ; e820_query — INT 15h E820, store entries at 0x7000.

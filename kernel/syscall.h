@@ -12,9 +12,53 @@
 #define SYS_getdents64 217
 #define SYS_exit    60
 
+
+/* Linux x86_64 struct stat. Matches glibc/mlibc layout. */
+
+/* POSIX time types. */
+struct mykernel_timespec {
+    int64_t tv_sec;
+    int64_t tv_nsec;
+};
+
+struct mykernel_timeval {
+    int64_t tv_sec;
+    int64_t tv_usec;
+};
+
+#define CLOCK_REALTIME   0
+#define CLOCK_MONOTONIC  1
+
+struct mykernel_stat {
+    uint64_t st_dev;
+    uint64_t st_ino;
+    uint64_t st_nlink;
+    uint32_t st_mode;
+    uint32_t st_uid;
+    uint32_t st_gid;
+    uint32_t __pad0;
+    uint64_t st_rdev;
+    int64_t  st_size;
+    int64_t  st_blksize;
+    int64_t  st_blocks;
+    uint64_t st_atime;
+    uint64_t st_atime_nsec;
+    uint64_t st_mtime;
+    uint64_t st_mtime_nsec;
+    uint64_t st_ctime;
+    uint64_t st_ctime_nsec;
+    int64_t  __unused[3];
+};
+
 void syscall_init(void);
 
+#define SYS_nanosleep   35
+#define SYS_gettimeofday 96
+#define SYS_clock_gettime 228
+#define SYS_clock_getres  229
 #define SYS_stat        4
+#define SYS_fstat       5
+#define SYS_lstat       6
 #define SYS_fstat       5
 #define SYS_mmap        9
 #define SYS_mprotect    10
@@ -22,6 +66,7 @@ void syscall_init(void);
 #define SYS_brk         12
 #define SYS_ioctl       16
 #define SYS_getpid      39
+#define SYS_newfstatat  262
 #define SYS_getcwd      79
 #define SYS_getuid      102
 #define SYS_getgid      104

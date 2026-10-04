@@ -109,24 +109,12 @@ void gdt_init(void)
     gdtp.base  = (uint64_t)&gdt;
     gdt_load(&gdtp);
 
-    serial_print("gdt: tss at ");
-    serial_hex((uint64_t)&tss);
-    serial_print(" rsp0 = ");
-    serial_hex(tss.rsp0);
-    serial_print(" stack_base = ");
-    serial_hex((uint64_t)kernel_stack);
-    serial_print("\n");
-
     /* Load the TSS into TR */
     __asm__ volatile("ltr %0" :: "r"((uint16_t)GDT_TSS));
 
     uint16_t tr;
     __asm__ volatile("str %0" : "=r"(tr));
-    serial_print("gdt: TR = ");
-    serial_hex(tr);
-    serial_print("\n");
 
-    serial_print("gdt: loaded GDT+TSS\n");
 }
 
 void tss_set_kernel_stack(uint64_t rsp0)

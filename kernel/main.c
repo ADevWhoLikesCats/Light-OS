@@ -77,29 +77,10 @@ __attribute__((section(".text._start"), used))
 void _start(void)
 {
     serial_init();
-    {
-        volatile unsigned char *p = (volatile unsigned char *)0x108640;
-        extern char __kernel_end[];
-        serial_print("boot: [0x108640]=");
-        serial_hex(p[0]);
-        serial_print(" [0x108641]=");
-        serial_hex(p[1]);
-        serial_print(" __kernel_end=");
-        serial_hex((uint64_t)__kernel_end);
-        serial_print("\n");
-    }
-    serial_print("mykernel: entry\n");
 
-    serial_print("mykernel: installing GDT+TSS...\n");
     gdt_init();
-
-    serial_print("mykernel: syscall_init...\n");
     syscall_init();
-
-    serial_print("mykernel: installing IDT...\n");
     idt_init();
-
-    serial_print("mykernel: PIC remap...\n");
     pic_remap();
 
     pit_init(100);
@@ -109,28 +90,14 @@ void _start(void)
     pic_clear_mask(1);
 
     __asm__ volatile("sti");
-
-    serial_print("mykernel: pmm_init...\n");
     pmm_init();
-
-    serial_print("mykernel: vmm_init...\n");
     vmm_init();
-
-    serial_print("mykernel: heap_init...\n");
     heap_init();
-
-    serial_print("mykernel: fb_init...\n");
     fb_init();
-
-    serial_print("mykernel: console_init...\n");
     console_init();
-
-    serial_print("mykernel: vfs_init...\n");
     vfs_init();
 
-    kputs("mykernel: console ready\n");
 
-    kputs("mykernel: idle loop, type on the keyboard\n");
 
     shell_loop();
 

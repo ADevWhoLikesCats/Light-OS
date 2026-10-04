@@ -100,13 +100,4 @@ void heap_stats(void)
         else         { used  += b->size; }
     }
 
-    serial_print("heap: blocks=");
-    serial_hex(blocks);
-    serial_print(" free_blocks=");
-    serial_hex(free_blocks);
-    serial_print(" used=");
-    serial_hex(used);
-    serial_print(" free=");
-    serial_hex(freeb);
-    serial_print("\n");
 }

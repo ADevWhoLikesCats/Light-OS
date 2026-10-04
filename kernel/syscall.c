@@ -4,6 +4,7 @@
 #include "console.h"
 #include "vfs.h"
 #include "mm.h"
+#include "pit.h"
 
 extern void exit_ctx_save(uint64_t *ctx);
 extern void exit_ctx_restore(uint64_t *ctx);
@@ -59,7 +60,30 @@ void syscall_init(void)
     /* FMASK: clear IF on entry so interrupts are disabled. */
     wrmsr(MSR_FMASK, 0x200);
 
-    serial_print("syscall: MSRs configured\n");
+}
+
+
+/* Fill a struct mykernel_stat from a VFS node.
+   Returns 0 on success, negative errno on failure. */
+static int fill_stat(const struct vfs_node *n, struct mykernel_stat *st)
+{
+    if (!n || !st) return -14;   /* EFAULT */
+
+    for (int i = 0; i < (int)sizeof(*st); i++) ((char *)st)[i] = 0;
+
+    st->st_dev      = 1;
+    st->st_ino      = (uint64_t)n;
+    st->st_nlink    = (n->type == VFS_DIR) ? 2 : 1;
+    st->st_mode     = n->mode;
+    st->st_uid      = n->uid;
+    st->st_gid      = n->gid;
+    st->st_size     = n->size;
+    st->st_blksize  = 4096;
+    st->st_blocks   = (n->size + 511) / 512;
+    st->st_atime    = 0;
+    st->st_mtime    = 0;
+    st->st_ctime    = 0;
+    return 0;
 }
 
 uint64_t syscall_handler(struct syscall_regs *r)
@@ -68,13 +92,6 @@ uint64_t syscall_handler(struct syscall_regs *r)
 
     switch (num) {
         case SYS_read: {
-            serial_print("sys: read fd=");
-            serial_hex(r->rdi);
-            serial_print(" buf=");
-            serial_hex(r->rsi);
-            serial_print(" count=");
-            serial_hex(r->rdx);
-            serial_print("\n");
             int fd = (int)r->rdi;
             char *buf = (char *)r->rsi;
             uint64_t count = r->rdx;
@@ -96,29 +113,12 @@ uint64_t syscall_handler(struct syscall_regs *r)
                 return got;
             }
             int n = vfs_read(fd, buf, count);
-            serial_print("sys: read returned ");
-            serial_hex(n);
-            serial_print("\n");
             return (n < 0) ? (uint64_t)-1 : (uint64_t)n;
         }
         case SYS_write: {
-            serial_print("sys: write fd=");
-            serial_hex(r->rdi);
-            serial_print(" buf=");
-            serial_hex(r->rsi);
-            serial_print(" count=");
-            serial_hex(r->rdx);
-            serial_print("\n");
             int fd = (int)r->rdi;
             const char *buf = (const char *)r->rsi;
             uint64_t count = r->rdx;
-
-            serial_print("sys: write first 8 bytes: ");
-            for (int i = 0; i < 8 && i < (int)count; i++) {
-                serial_hex((unsigned char)buf[i]);
-                serial_print(" ");
-            }
-            serial_print("\n");
 
             if (fd == 1 || fd == 2) {
                 for (uint64_t i = 0; i < count; i++) {
@@ -130,17 +130,11 @@ uint64_t syscall_handler(struct syscall_regs *r)
             return (uint64_t)-1;
         }
         case SYS_open: {
-            serial_print("sys: open path=");
-            serial_print((const char *)r->rdi);
-            serial_print("\n");
             const char *path = (const char *)r->rdi;
             int fd = vfs_open(path);
             return (fd < 0) ? (uint64_t)-1 : (uint64_t)fd;
         }
         case SYS_close: {
-            serial_print("sys: close fd=");
-            serial_hex(r->rdi);
-            serial_print("\n");
             int fd = (int)r->rdi;
             int rv = vfs_close(fd);
             return (rv < 0) ? (uint64_t)-1 : 0;
@@ -239,20 +233,80 @@ uint64_t syscall_handler(struct syscall_regs *r)
             return 0;
         }
         case SYS_stat:
-        case SYS_fstat:
-        case SYS_ioctl:
-        case SYS_getcwd:
-            return (uint64_t)-38;   /* -ENOSYS for now */
-
+        case SYS_lstat: {
+            const char *path = (const char *)r->rdi;
+            struct mykernel_stat *st = (struct mykernel_stat *)r->rsi;
+            struct vfs_node *n = vfs_lookup(path);
+            if (!n) return (uint64_t)-2;   /* ENOENT */
+            int rv = fill_stat(n, st);
+            return (rv < 0) ? (uint64_t)rv : 0;
+        }
+        case SYS_fstat: {
+            int fd = (int)r->rdi;
+            struct mykernel_stat *st = (struct mykernel_stat *)r->rsi;
+            struct vfs_node *n = vfs_fd_node(fd);
+            if (!n) return (uint64_t)-9;   /* EBADF */
+            int rv = fill_stat(n, st);
+            return (rv < 0) ? (uint64_t)rv : 0;
+        }
+        case SYS_newfstatat: {
+            const char *path = (const char *)r->rsi;
+            struct mykernel_stat *st = (struct mykernel_stat *)r->rdx;
+            struct vfs_node *n = vfs_lookup(path);
+            if (!n) return (uint64_t)-2;
+            int rv = fill_stat(n, st);
+            return (rv < 0) ? (uint64_t)rv : 0;
+        }
+        case SYS_clock_gettime: {
+            int clockid = (int)r->rdi;
+            struct mykernel_timespec *tp = (struct mykernel_timespec *)r->rsi;
+            if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC)
+                return (uint64_t)-22;   /* -EINVAL */
+            uint64_t t = pit_ticks();
+            tp->tv_sec  = t / 100;
+            tp->tv_nsec = (t % 100) * 10000000ULL;
+            return 0;
+        }
+        case SYS_clock_getres: {
+            int clockid = (int)r->rdi;
+            struct mykernel_timespec *tp = (struct mykernel_timespec *)r->rsi;
+            if (clockid != CLOCK_REALTIME && clockid != CLOCK_MONOTONIC)
+                return (uint64_t)-22;
+            if (tp) {
+                tp->tv_sec  = 0;
+                tp->tv_nsec = 10000000ULL;   /* 10 ms */
+            }
+            return 0;
+        }
+        case SYS_nanosleep: {
+            const struct mykernel_timespec *req = (const struct mykernel_timespec *)r->rdi;
+            uint64_t ticks = (uint64_t)req->tv_sec * 100
+                           + (uint64_t)req->tv_nsec / 10000000ULL;
+            uint64_t target = pit_ticks() + ticks;
+            /* Interrupts are disabled at syscall entry — enable them so
+               the PIT can tick, then disable again before returning. */
+            __asm__ volatile("sti");
+            while (pit_ticks() < target) {
+                __asm__ volatile("hlt");
+            }
+            __asm__ volatile("cli");
+            return 0;
+        }
+        case SYS_gettimeofday: {
+            struct mykernel_timeval *tv = (struct mykernel_timeval *)r->rdi;
+            uint64_t t = pit_ticks();
+            if (tv) {
+                tv->tv_sec  = t / 100;
+                tv->tv_usec = (t % 100) * 10000ULL;
+            }
+            return 0;
+        }
         case SYS_exit:
             exit_ctx_restore(exit_ctx);
             /* unreachable */
             for (;;) __asm__ volatile("hlt");
 
         default:
-            serial_print("syscall: unknown ");
-            serial_hex(num);
-            serial_print("\n");
             return (uint64_t)-1;
     }
 }
@@ -276,13 +330,9 @@ void enter_userspace(void)
     const uint64_t USER_STACK_VIRT = 0x7F000000ULL;
     const uint64_t USER_STACK_PAGES = 4;
 
-    serial_print("enter_userspace: loading embedded ELF (");
-    serial_hex(hello_elf_len);
-    serial_print(" bytes)\n");
 
     uint64_t entry = elf_load(hello_elf, hello_elf_len, USER_LOAD_BIAS);
     if (!entry) {
-        serial_print("enter_userspace: elf_load failed\n");
         for (;;) __asm__ volatile("hlt");
     }
 
@@ -293,9 +343,6 @@ void enter_userspace(void)
     }
     uint64_t user_stack_top = USER_STACK_VIRT + USER_STACK_PAGES * PAGE_SIZE;
 
-    serial_print("enter_userspace: jumping to entry ");
-    serial_hex(entry);
-    serial_print("\n");
 
     __asm__ volatile(
         "pushq $0x1B\n"          /* SS = USER_DS | 3 */
@@ -323,7 +370,6 @@ void enter_userspace_elf(const void *elf, uint64_t len)
 
     uint64_t entry = elf_load(elf, len, USER_LOAD_BIAS);
     if (!entry) {
-        serial_print("enter_userspace_elf: elf_load failed\n");
         return;
     }
 
@@ -335,14 +381,9 @@ void enter_userspace_elf(const void *elf, uint64_t len)
 
     {
         const volatile uint8_t *p = (const volatile uint8_t *)0x40001000;
-        serial_print("elf: bytes at 0x40001000: ");
         for (int k = 0; k < 32; k++) { serial_hex(p[k]); serial_print(" "); }
-        serial_print("\n");
     }
 
-    serial_print("enter_userspace_elf: jumping to entry ");
-    serial_hex(entry);
-    serial_print("\n");
 
     __asm__ volatile(
         "pushq $0x1B\n"          /* SS = USER_DS | 3 */

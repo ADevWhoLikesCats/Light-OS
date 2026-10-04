@@ -1,4 +1,4 @@
-# ---- Build outputs ----
+# Build outputs
 build/
 *.o
 *.elf
@@ -6,13 +6,13 @@ build/
 *.img
 *.iso
 
-# ---- QEMU / debug artifacts ----
+# QEMU / debug artifacts
 *.log
 qemu.log
 serial.log
 monitor.log
 
-# ---- Editor / IDE ----
+# Editor / IDE
 .vscode/
 .idea/
 *.swp
@@ -21,18 +21,18 @@ monitor.log
 \#*\#
 .\#*
 
-# ---- OS noise ----
+# OS noise
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# ---- Compiler artifacts ----
+# Compiler artifacts
 *.d
 *.gcda
 *.gcno
 *.gcov
 
-# ---- Misc ----
+# Misc
 core
 core.*
 vgcore.*
@@ -40,3 +40,7 @@ tags
 TAGS
 cscope.out
 compile_commands.json
+
+# Third-party (mlibc clone, freestnd headers, etc.)
+third_party/mlibc/
+third_party/mlibc/build-mykernel/

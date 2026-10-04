@@ -44,41 +44,26 @@ typedef struct {
 uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
 {
     const uint8_t *base = (const uint8_t *)elf_data;
-    serial_print("elf: base=");
-    serial_hex((uint64_t)base);
-    serial_print(" [0x1000]=");
-    serial_hex(base[0x1000]);
-    serial_print(" [0x2000]=");
-    serial_hex(base[0x2000]);
-    serial_print(" [0x2001]=");
-    serial_hex(base[0x2001]);
-    serial_print(" size=");
-    serial_hex(elf_size);
-    serial_print("\n");
+
+
+
+
 
     /* Sanity: size must at least fit the header */
     if (elf_size < sizeof(Elf64_Ehdr)) {
-        serial_print("elf: file too small\n");
         return 0;
     }
 
     /* Magic check */
     if (base[0] != 0x7F || base[1] != 'E' || base[2] != 'L' || base[3] != 'F') {
-        serial_print("elf: bad magic\n");
         return 0;
     }
     if (base[4] != 2 || base[5] != 1) {
-        serial_print("elf: not 64-bit LSB\n");
         return 0;
     }
 
     const Elf64_Ehdr *eh = (const Elf64_Ehdr *)base;
 
-    serial_print("elf: entry = ");
-    serial_hex(eh->e_entry);
-    serial_print(" phnum = ");
-    serial_hex(eh->e_phnum);
-    serial_print("\n");
 
     const Elf64_Phdr *ph = (const Elf64_Phdr *)(base + eh->e_phoff);
 
@@ -91,15 +76,8 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
         uint64_t filesz = p->p_filesz;
         uint64_t offset = p->p_offset;
 
-        serial_print("elf: LOAD p_offset=");
-        serial_hex(p->p_offset);
-        serial_print(" vaddr=");
-        serial_hex(vaddr);
-        serial_print(" filesz=");
-        serial_hex(filesz);
-        serial_print(" memsz=");
-        serial_hex(memsz);
-        serial_print("\n");
+
+
 
         /* Page-align the range. */
         uint64_t page_start = vaddr & ~0xFFFULL;
@@ -110,7 +88,6 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
             uint64_t page_va = page_start + pg * PAGE_SIZE;
             void *phys = pmm_alloc_page();
             if (!phys) {
-                serial_print("elf: out of memory\n");
                 return 0;
             }
             /* Zero the page so BSS and partial-file regions are clean. */
@@ -128,23 +105,12 @@ uint64_t elf_load(const void *elf_data, uint64_t elf_size, uint64_t load_bias)
             }
 
             {
-                serial_print("elf: seg dst[0..7]=");
-                for (int q = 0; q < 8; q++) {
-                    uint32_t v = dst[q];
-                    char buf[3] = { (v >> 4) < 10 ? '0'+(v>>4) : 'a'+((v>>4)-10),
-                                    (v & 0xF) < 10 ? '0'+(v&0xF) : 'a'+((v&0xF)-10),
-                                    0 };
-                    serial_print(buf);
-                    serial_print(" ");
-                }
-                serial_print("\n");
             }
 
             /* Map with USER access. Writable if PF_W. */
             uint64_t flags = PTE_WRITE;   /* simplest: always writable for now */
             if (p->p_flags & PF_W) flags = PTE_WRITE;
             if (vmm_map_page_user(page_va, (uint64_t)phys, flags) != 0) {
-                serial_print("elf: vmm_map_page_user failed\n");
                 return 0;
             }
         }

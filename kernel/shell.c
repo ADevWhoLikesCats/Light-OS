@@ -6,6 +6,8 @@
 #include "serial.h"
 #include "cat_elf.h"
 #include "memtest_elf.h"
+#include "stat_test_elf.h"
+#include "time_test_elf.h"
 
 void enter_userspace_elf(const void *elf, uint64_t len);
 
@@ -90,6 +92,8 @@ static void cmd_help(void)
     console_puts("  peek         report kernel state\n");
     console_puts("  runelf       run embedded cat.elf in userspace\n");
     console_puts("  runmem       run embedded memtest.elf in userspace\n");
+    console_puts("  runstat      run embedded stat_test.elf in userspace\n");
+    console_puts("  runtime      run embedded time_test.elf in userspace\n");
 }
 
 static void cmd_echo(int argc, char **argv)
@@ -126,6 +130,20 @@ static void cmd_cat(int argc, char **argv)
         for (int i = 0; i < n; i++) console_putchar(buf[i]);
     }
     vfs_close(fd);
+}
+
+static void cmd_runtime(void)
+{
+    console_puts("runtime: loading embedded time_test.elf\n");
+    enter_userspace_elf(time_test_elf, time_test_elf_len);
+    console_puts("runtime: returned\n");
+}
+
+static void cmd_runstat(void)
+{
+    console_puts("runstat: loading embedded stat_test.elf\n");
+    enter_userspace_elf(stat_test_elf, stat_test_elf_len);
+    console_puts("runstat: returned\n");
 }
 
 static void cmd_runmem(void)
@@ -190,6 +208,8 @@ static void run_command(int argc, char **argv)
     if (!strcmp_(argv[0], "peek"))  { cmd_peek();   return; }
     if (!strcmp_(argv[0], "runelf")){ cmd_runelf(); return; }
     if (!strcmp_(argv[0], "runmem")){ cmd_runmem(); return; }
+    if (!strcmp_(argv[0], "runstat")){ cmd_runstat(); return; }
+    if (!strcmp_(argv[0], "runtime")){ cmd_runtime(); return; }
 
     console_puts("unknown command: ");
     console_puts(argv[0]);

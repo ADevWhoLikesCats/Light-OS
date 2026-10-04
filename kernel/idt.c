@@ -19,7 +19,6 @@ struct idt_ptr {
 } __attribute__((packed));
 
 static struct idt_entry idt[IDT_ENTRIES];
-static int irq_debug_count = 0;
 static struct idt_ptr   idtp;
 
 extern void *isr_stub_table[32];
@@ -50,7 +49,7 @@ static void serial_print(const char *s)
 
 static void serial_hex(uint64_t v)
 {
-    serial_print("0x");
+
     for (int i = 60; i >= 0; i -= 4) {
         int d = (v >> i) & 0xF;
         serial_putc(d < 10 ? '0' + d : 'a' + d - 10);
@@ -106,54 +105,13 @@ static const char *exception_name(uint64_t v)
 
 void isr_handler(struct regs *r)
 {
-    serial_print("\n=== EXCEPTION ===\n");
-    serial_print("vector: ");
-    serial_hex(r->vector);
-    serial_print(" (");
-    serial_print(exception_name(r->vector));
-    serial_print(")\n");
-
-    serial_print("error:  ");
-    serial_hex(r->error_code);
-    serial_print("\n");
-
-    serial_print("rip:    ");
-    serial_hex(r->rip);
-    serial_print("\n");
-
-    serial_print("cs:     ");
-    serial_hex(r->cs);
-    serial_print("\n");
-
-    serial_print("rflags: ");
-    serial_hex(r->rflags);
-    serial_print("\n");
-
-    serial_print("rsp:    ");
-    serial_hex(r->rsp);
-    serial_print("\n");
-
-    serial_print("rax:    ");
-    serial_hex(r->rax);
-    serial_print("  rbx: ");
-    serial_hex(r->rbx);
-    serial_print("\n");
-
-    serial_print("rcx:    ");
-    serial_hex(r->rcx);
-    serial_print("  rdx: ");
-    serial_hex(r->rdx);
-    serial_print("\n");
 
     if (r->vector == 14) {
         uint64_t cr2;
         __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
-        serial_print("cr2:    ");
-        serial_hex(cr2);
-        serial_print("\n");
+
     }
 
-    serial_print("=== HALT ===\n");
     for (;;) {
         __asm__ volatile("cli; hlt");
     }
@@ -174,9 +132,7 @@ void irq_handler(struct regs *r)
         extern void keyboard_irq(void);
         keyboard_irq();
     } else {
-        serial_print("\nunexpected IRQ ");
-        serial_hex(irq);
-        serial_print("\n");
+
     }
 
     extern void pic_send_eoi(uint8_t irq);

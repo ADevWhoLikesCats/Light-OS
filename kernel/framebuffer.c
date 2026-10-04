@@ -32,18 +32,6 @@ void fb_init(void)
     fb.pitch  = s->pitch;
     fb.bpp    = s->bpp;
 
-    serial_print("fb: phys=");
-    serial_hex(fb.phys);
-    serial_print(" w=");
-    serial_hex(fb.width);
-    serial_print(" h=");
-    serial_hex(fb.height);
-    serial_print(" pitch=");
-    serial_hex(fb.pitch);
-    serial_print(" bpp=");
-    serial_hex(fb.bpp);
-    serial_print("\n");
-
     /* Map the framebuffer at FB_VIRT_BASE. */
     uint64_t fb_size = (uint64_t)fb.pitch * fb.height;
     uint64_t pages   = (fb_size + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -55,11 +43,6 @@ void fb_init(void)
                      PTE_WRITE);
     }
 
-    serial_print("fb: mapped ");
-    serial_hex(pages);
-    serial_print(" pages at ");
-    serial_hex(FB_VIRT_BASE);
-    serial_print("\n");
 }
 
 struct fb_info *fb_get_info(void) { return &fb; }
