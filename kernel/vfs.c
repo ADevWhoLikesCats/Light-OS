@@ -33,7 +33,6 @@ static int segment_matches(const char *seg, int seg_len, const char *name)
 
 struct vfs_node *vfs_lookup(const char *path)
 {
-    serial_print("VL entered\n");
     if (!path || path[0] != '/') { serial_print("VL bad prefix\n"); return 0; }
 
     struct vfs_node *cur = &initramfs_root;
@@ -71,7 +70,7 @@ struct vfs_node *vfs_lookup(const char *path)
             }
             child = child->next;
         }
-        if (!found) { serial_print("VL: no match\n"); return 0; }
+        if (!found) return 0;
     }
 
     return cur;

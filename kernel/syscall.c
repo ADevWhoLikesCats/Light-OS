@@ -101,15 +101,6 @@ static int fill_stat(const struct vfs_node *n, struct mykernel_stat *st)
 uint64_t syscall_handler(struct syscall_regs *r)
 {
     uint64_t num = r->rax;
-    if (num == 80 || num == 21 || num == 4 || num == 5) {
-        serial_print("syscall DEBUG num=");
-        serial_hex(num);
-        serial_print(" rdi=");
-        serial_hex(r->rdi);
-        serial_print(" '");
-        serial_print((const char *)r->rdi);
-        serial_print("'\n");
-    }
 
     switch (num) {
         case SYS_read: {
