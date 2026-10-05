@@ -5,6 +5,7 @@
 #include "vfs.h"
 #include "mm.h"
 #include "pit.h"
+#include "fd.h"
 
 static char kernel_cwd[256];
 static void strcpy_(char *dst, const char *s, int max) {
@@ -139,7 +140,10 @@ uint64_t syscall_handler(struct syscall_regs *r)
                 }
                 return count;
             }
-            return (uint64_t)-1;
+
+            /* Otherwise, dispatch to the fd table: pipes or files. */
+            int n = vfs_write(fd, buf, count);
+            return (n < 0) ? (uint64_t)-1 : (uint64_t)n;
         }
         case SYS_open: {
             const char *path = (const char *)r->rdi;
@@ -372,35 +376,37 @@ uint64_t syscall_handler(struct syscall_regs *r)
         }
 
         case SYS_pipe: {
-            /* TODO: real pipe. Return ENOSYS for now. */
-            return (uint64_t)-38;
+            int fds[2];
+            if (pipe_create(fds) < 0) return (uint64_t)-1;
+            int *user_fds = (int *)r->rdi;
+            user_fds[0] = fds[0];
+            user_fds[1] = fds[1];
+            return 0;
         }
-
         case SYS_dup: {
-            /* Stub — return a new fd that aliases the same file. */
             int fd = (int)r->rdi;
-            struct vfs_node *n = vfs_fd_node(fd);
-            if (!n) return (uint64_t)-9;    /* EBADF */
-            /* Find a free fd >= 3 and "open" the same file at offset 0. */
-            /* Simplified: we don't actually track per-fd offsets separately. */
-            return (uint64_t)-38;   /* ENOSYS for now */
+            int nfd = fd_dup(fd, 3);
+            return (nfd < 0) ? (uint64_t)-1 : (uint64_t)nfd;
         }
-
         case SYS_dup2: {
-            return (uint64_t)-38;
+            int oldfd = (int)r->rdi;
+            int newfd = (int)r->rsi;
+            int rv = fd_dup2(oldfd, newfd);
+            return (rv < 0) ? (uint64_t)-1 : (uint64_t)rv;
         }
-
         case SYS_fcntl: {
-            /* F_GETFD=1, F_SETFD=2, F_GETFL=3, F_SETFL=4, F_DUPFD=0. */
+            int fd  = (int)r->rdi;
             int cmd = (int)r->rsi;
+            uint64_t arg = r->rdx;
             switch (cmd) {
-                case 1: return 0;               /* F_GETFD */
-                case 3: return 0;               /* F_GETFL — O_RDONLY */
-                case 2: case 4: return 0;       /* F_SETFD/F_SETFL — nop */
-                default: return (uint64_t)-22;  /* EINVAL */
+                case 0:  return (uint64_t)fd_dup(fd, (int)arg);  /* F_DUPFD */
+                case 1:  return 0;                                /* F_GETFD */
+                case 2:  return 0;                                /* F_SETFD */
+                case 3:  return 0;                                /* F_GETFL */
+                case 4:  return 0;                                /* F_SETFL */
+                default: return (uint64_t)-22;
             }
         }
-
         case SYS_exit:
             exit_ctx_restore(exit_ctx);
             /* unreachable */
@@ -461,6 +467,7 @@ void enter_userspace(void)
 
 
 #include "elf.h"
+#include "fd.h"
 
 void enter_userspace_elf(const void *elf, uint64_t len)
 {

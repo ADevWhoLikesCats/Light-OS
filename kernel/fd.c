@@ -44,7 +44,7 @@ int fd_alloc(struct fdobj *obj)
         if (!fd_table[i].used) {
             fd_table[i].used = 1;
             fd_table[i].obj  = obj;
-            obj->refcount++;
+            /* refcount is set to 1 by fdobj_alloc; do not increment here */
             return i;
         }
     }
@@ -69,7 +69,7 @@ int fd_close(int fd)
 
     if (o) {
         o->refcount--;
-        if (o->refcount <= 0 && o->kind == FDOBJ_PIPE && o->pipe) {
+        if (o->refcount == 0 && o->kind == FDOBJ_PIPE && o->pipe) {
             if (o->write_end) o->pipe->writers--;
             else              o->pipe->readers--;
         }
@@ -128,13 +128,15 @@ int pipe_create(int fds[2])
     if (!rd || !wr) return -1;
     rd->pipe = p; rd->write_end = 0;
     wr->pipe = p; wr->write_end = 1;
+    p->readers = 1;
+    p->writers = 1;
 
     int r = fd_alloc(rd);
     int w = fd_alloc(wr);
     if (r < 0 || w < 0) return -1;
 
-    p->readers++;
-    p->writers++;
+    /* readers/writers are tracked via refcount on the fdobj.
+       pipe_create does not need to increment them here. */
 
     fds[0] = r;
     fds[1] = w;
