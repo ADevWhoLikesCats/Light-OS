@@ -371,7 +371,42 @@ uint64_t syscall_handler(struct syscall_regs *r)
         }
 
         case SYS_ioctl: {
-            /* TODO: termios, winsize. For now, not-a-tty. */
+            int fd = (int)r->rdi;
+            uint64_t request = r->rsi;
+            void *argp = (void *)r->rdx;
+
+            /* Terminal size — pretend 80x24. */
+            if (request == 0x5413 /* TIOCGWINSZ */) {
+                struct { uint16_t r, c, xp, yp; } *ws = argp;
+                ws->r = 24; ws->c = 80; ws->xp = 0; ws->yp = 0;
+                return 0;
+            }
+
+            /* termios — fill with sane defaults. */
+            if (request == 0x5401 /* TCGETS */) {
+                uint8_t *t = (uint8_t *)argp;
+                for (int i = 0; i < 60; i++) t[i] = 0;
+                /* c_lflag ECHO|ICANON|ISIG */
+                t[12] = 0x0B; t[13] = 0x00; t[14] = 0x00; t[15] = 0x00;
+                /* c_cc[VMIN] = 1, c_cc[VTIME] = 0 */
+                t[23] = 1; t[24] = 0;
+                return 0;
+            }
+
+            /* FIONREAD — bytes available to read. */
+            if (request == 0x541B /* FIONREAD */) {
+                struct fdobj *o = fd_get(fd);
+                if (!o) return (uint64_t)-9;   /* EBADF */
+                int *out = (int *)argp;
+                if (o->kind == FDOBJ_PIPE && o->pipe) {
+                    *out = (int)o->pipe->count;
+                } else {
+                    *out = 0;
+                }
+                return 0;
+            }
+
+            /* Everything else: not a tty. */
             return (uint64_t)-25;   /* -ENOTTY */
         }
 

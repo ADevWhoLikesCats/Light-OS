@@ -52,7 +52,7 @@ ASFLAGS_ELF := -f elf64
 STAGE2_START_SECTOR := 1
 STAGE2_SECTORS      := 32
 KERNEL_START_SECTOR := 17
-KERNEL_SECTORS      := 192
+KERNEL_SECTORS      := 208
 
 # ---- Phony targets ----
 .PHONY: all clean run boot debug kernel dirs
