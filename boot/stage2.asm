@@ -13,7 +13,7 @@ ORG 0x8000
 KERNEL_STAGE_SEG   equ 0x1000
 KERNEL_STAGE_OFF   equ 0x0000
 KERNEL_LBA         equ 17
-KERNEL_SECS        equ 160
+KERNEL_SECS        equ 168
 KERNEL_FINAL       equ 0x100000     ; physical addr of kernel in long mode
 
 SECTORS_PER_TRACK  equ 18

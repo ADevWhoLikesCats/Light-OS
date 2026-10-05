@@ -80,7 +80,8 @@ int vfs_open(const char *path)
 {
     struct vfs_node *n = vfs_lookup(path);
     if (!n) return -1;
-    if (n->type != VFS_FILE) return -1;
+    /* Allow opening both files and directories. */
+    if (n->type != VFS_FILE && n->type != VFS_DIR) return -1;
 
     for (int i = 3; i < VFS_MAX_FDS; i++) {
         if (!fd_table[i].used) {
@@ -188,4 +189,80 @@ void vfs_list(const char *path)
         console_puts(c->name);
         console_puts(c->type == VFS_DIR ? "/\n" : "\n");
     }
+}
+
+
+/* ---------- fd offset helpers ---------- */
+uint64_t vfs_get_fd_offset(int fd)
+{
+    if (fd < 0 || fd >= VFS_MAX_FDS) return (uint64_t)-1;
+    if (!fd_table[fd].used) return (uint64_t)-1;
+    return fd_table[fd].offset;
+}
+
+int vfs_set_fd_offset(int fd, uint64_t offset)
+{
+    if (fd < 0 || fd >= VFS_MAX_FDS) return -1;
+    if (!fd_table[fd].used) return -1;
+    fd_table[fd].offset = offset;
+    return 0;
+}
+
+/* ---------- getdents64 ---------- */
+struct linux_dirent64 {
+    uint64_t d_ino;
+    int64_t  d_off;
+    uint16_t d_reclen;
+    uint8_t  d_type;
+    char     d_name[];
+};
+
+#define DT_UNKNOWN 0
+#define DT_REG     8
+#define DT_DIR     4
+
+int vfs_getdents64(int fd, void *buf, uint64_t count)
+{
+    struct vfs_node *dir = vfs_fd_node(fd);
+    if (!dir) return -1;
+    if (dir->type != VFS_DIR) return -1;
+
+    uint64_t offset = vfs_get_fd_offset(fd);
+    if (offset == (uint64_t)-1) return -1;
+
+    uint8_t *out = (uint8_t *)buf;
+    uint64_t written = 0;
+    uint64_t idx = offset;
+
+    struct vfs_node *child = dir->children;
+    for (uint64_t i = 0; child && i < idx; i++) child = child->next;
+
+    while (child) {
+        uint64_t name_len = 0;
+        while (child->name[name_len]) name_len++;
+
+        uint64_t raw_len = 19 + name_len + 1;
+        uint64_t reclen  = (raw_len + 7) & ~7ULL;
+
+        if (written + reclen > count) break;
+
+        struct linux_dirent64 *d = (struct linux_dirent64 *)(out + written);
+        d->d_ino    = (uint64_t)child;
+        d->d_off    = (int64_t)(idx + 1);
+        d->d_reclen = (uint16_t)reclen;
+        d->d_type   = (child->type == VFS_DIR) ? DT_DIR : DT_REG;
+        for (uint64_t i = 0; i < name_len; i++) d->d_name[i] = child->name[i];
+        d->d_name[name_len] = 0;
+
+        for (uint64_t i = raw_len; i < reclen; i++) {
+            ((uint8_t *)d)[i] = 0;
+        }
+
+        written += reclen;
+        idx++;
+        child = child->next;
+    }
+
+    vfs_set_fd_offset(fd, idx);
+    return (int)written;
 }

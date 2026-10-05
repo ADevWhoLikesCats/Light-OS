@@ -9,6 +9,7 @@
 #include "stat_test_elf.h"
 #include "time_test_elf.h"
 #include "posix_test_elf.h"
+#include "ls_test_elf.h"
 
 void enter_userspace_elf(const void *elf, uint64_t len);
 
@@ -95,6 +96,7 @@ static void cmd_help(void)
     console_puts("  runmem       run embedded memtest.elf in userspace\n");
     console_puts("  runstat      run embedded stat_test.elf in userspace\n");
     console_puts("  runtime      run embedded time_test.elf in userspace\n");
+    console_puts("  runls        run embedded ls_test.elf in userspace\n");
 }
 
 static void cmd_echo(int argc, char **argv)
@@ -138,6 +140,13 @@ static void cmd_runposix(void)
     console_puts("runposix: loading posix_test.elf\n");
     enter_userspace_elf(posix_test_elf, posix_test_elf_len);
     console_puts("runposix: returned\n");
+}
+
+static void cmd_runls(void)
+{
+    console_puts("runls: loading embedded ls_test.elf\n");
+    enter_userspace_elf(ls_test_elf, ls_test_elf_len);
+    console_puts("runls: returned\n");
 }
 
 static void cmd_runtime(void)
@@ -218,6 +227,7 @@ static void run_command(int argc, char **argv)
     if (!strcmp_(argv[0], "runmem")){ cmd_runmem(); return; }
     if (!strcmp_(argv[0], "runstat")){ cmd_runstat(); return; }
     if (!strcmp_(argv[0], "runtime")){ cmd_runtime(); return; }
+    if (!strcmp_(argv[0], "runls")){ cmd_runls(); return; }
     if (!strcmp_(argv[0], "runposix")){ cmd_runposix(); return; }
 
     console_puts("unknown command: ");

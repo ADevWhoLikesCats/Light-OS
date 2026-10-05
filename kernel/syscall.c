@@ -162,8 +162,8 @@ uint64_t syscall_handler(struct syscall_regs *r)
             int fd = (int)r->rdi;
             void *buf = (void *)r->rsi;
             uint64_t count = r->rdx;
-            (void)fd; (void)buf; (void)count;
-            return (uint64_t)-1;   /* TODO: implement */
+            int n = vfs_getdents64(fd, buf, count);
+            return (n < 0) ? (uint64_t)-1 : (uint64_t)n;
         }
         case SYS_brk: {
             uint64_t new_brk = mm_brk(r->rdi);
