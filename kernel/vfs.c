@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include "fd.h"
 #include "serial.h"
 #include "console.h"
 
@@ -6,19 +7,10 @@
 extern struct vfs_node initramfs_root;
 
 /* File descriptor table. Global for now — becomes per-process later. */
-static struct vfs_fd {
-    struct vfs_node *node;
-    uint64_t         offset;
-    int              used;
-} fd_table[VFS_MAX_FDS];
 
 void vfs_init(void)
 {
-    for (int i = 0; i < VFS_MAX_FDS; i++) {
-        fd_table[i].used = 0;
-        fd_table[i].node = 0;
-        fd_table[i].offset = 0;
-    }
+    fd_init();
 }
 
 /* Compare path segment (up to next '/' or '\0') against node name. */
@@ -80,75 +72,82 @@ int vfs_open(const char *path)
 {
     struct vfs_node *n = vfs_lookup(path);
     if (!n) return -1;
-    /* Allow opening both files and directories. */
     if (n->type != VFS_FILE && n->type != VFS_DIR) return -1;
 
-    for (int i = 3; i < VFS_MAX_FDS; i++) {
-        if (!fd_table[i].used) {
-            fd_table[i].used   = 1;
-            fd_table[i].node   = n;
-            fd_table[i].offset = 0;
-            return i;
-        }
-    }
-    return -1;
+    struct fdobj *o = fdobj_file(n);
+    if (!o) return -1;
+    int fd = fd_alloc(o);
+    if (fd < 0) return -1;
+    return fd;
 }
 
 int vfs_read(int fd, void *buf, size_t n)
 {
-    if (fd < 0 || fd >= VFS_MAX_FDS) return -1;
-    if (!fd_table[fd].used) return -1;
+    struct fdobj *o = fd_get(fd);
+    if (!o) return -1;
 
-    struct vfs_fd *f = &fd_table[fd];
-    struct vfs_node *node = f->node;
+    if (o->kind == FDOBJ_PIPE) {
+        return pipe_read(o->pipe, buf, n);
+    }
 
-    if (f->offset >= node->size) return 0;
+    /* file */
+    struct vfs_node *node = o->node;
+    if (!node) return -1;
+    if (o->offset >= node->size) return 0;
 
-    size_t remain = node->size - f->offset;
+    size_t remain = node->size - o->offset;
     if (n > remain) n = remain;
 
-    const uint8_t *src = node->data + f->offset;
+    const uint8_t *src = node->data + o->offset;
     uint8_t *dst = (uint8_t *)buf;
     for (size_t i = 0; i < n; i++) dst[i] = src[i];
 
-    f->offset += n;
+    o->offset += n;
     return (int)n;
 }
 
+int vfs_write(int fd, const void *buf, size_t n)
+{
+    struct fdobj *o = fd_get(fd);
+    if (!o) return -1;
+
+    if (o->kind == FDOBJ_PIPE) {
+        return pipe_write(o->pipe, buf, n);
+    }
+    /* read-only filesystem */
+    return -1;
+}
+
+
 int vfs_close(int fd)
 {
-    if (fd < 0 || fd >= VFS_MAX_FDS) return -1;
-    if (!fd_table[fd].used) return -1;
-    fd_table[fd].used = 0;
-    fd_table[fd].node = 0;
-    fd_table[fd].offset = 0;
-    return 0;
+    return fd_close(fd);
 }
 
 
 int vfs_lseek(int fd, uint64_t offset, int whence)
 {
-    if (fd < 0 || fd >= VFS_MAX_FDS) return -1;
-    if (!fd_table[fd].used) return -1;
+    struct fdobj *o = fd_get(fd);
+    if (!o) return -1;
+    if (o->kind != FDOBJ_FILE) return -1;
 
-    struct vfs_fd *f = &fd_table[fd];
-    struct vfs_node *node = f->node;
-
-    uint64_t new_off = f->offset;
-    if (whence == 0) new_off = offset;                     /* SEEK_SET */
-    else if (whence == 1) new_off = f->offset + offset;    /* SEEK_CUR */
-    else if (whence == 2) new_off = node->size + offset;   /* SEEK_END */
+    struct vfs_node *node = o->node;
+    uint64_t new_off = o->offset;
+    if (whence == 0) new_off = offset;
+    else if (whence == 1) new_off = o->offset + offset;
+    else if (whence == 2) new_off = node->size + offset;
     else return -1;
 
-    f->offset = new_off;
+    o->offset = new_off;
     return (int)new_off;
 }
 
 struct vfs_node *vfs_fd_node(int fd)
 {
-    if (fd < 0 || fd >= VFS_MAX_FDS) return 0;
-    if (!fd_table[fd].used) return 0;
-    return fd_table[fd].node;
+    struct fdobj *o = fd_get(fd);
+    if (!o) return 0;
+    if (o->kind != FDOBJ_FILE) return 0;
+    return o->node;
 }
 
 /* Iterate a directory. *cookie starts at 0 and is updated to point at
@@ -195,16 +194,16 @@ void vfs_list(const char *path)
 /* ---------- fd offset helpers ---------- */
 uint64_t vfs_get_fd_offset(int fd)
 {
-    if (fd < 0 || fd >= VFS_MAX_FDS) return (uint64_t)-1;
-    if (!fd_table[fd].used) return (uint64_t)-1;
-    return fd_table[fd].offset;
+    struct fdobj *o = fd_get(fd);
+    if (!o) return (uint64_t)-1;
+    return o->offset;
 }
 
 int vfs_set_fd_offset(int fd, uint64_t offset)
 {
-    if (fd < 0 || fd >= VFS_MAX_FDS) return -1;
-    if (!fd_table[fd].used) return -1;
-    fd_table[fd].offset = offset;
+    struct fdobj *o = fd_get(fd);
+    if (!o) return -1;
+    o->offset = offset;
     return 0;
 }
 
